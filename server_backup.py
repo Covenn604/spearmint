@@ -139,7 +139,7 @@ def replace_file(source,target):
     target.parent.mkdir(parents=True,exist_ok=True)
     temp=target.with_name(target.name+'.restore-tmp')
     shutil.copyfile(source,temp)
-    with open(temp,'rb') as f: os.fsync(f.fileno())
+    with open(temp,'r+b') as f: os.fsync(f.fileno())
     os.replace(temp,target)
 
 
