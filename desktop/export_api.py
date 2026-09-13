@@ -16,6 +16,9 @@ class ExportApi:
     def save_backup(self, csv_text):
         return self._save_csv(csv_text,'spearmint-backup.csv')
 
+    def save_server_backup(self,csv_text):
+        return self._save_csv(csv_text,'spearmint-server-backup.csv')
+
     def _save_csv(self, csv_text, filename):
         import webview
         if not isinstance(csv_text, str):

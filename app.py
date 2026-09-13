@@ -2,6 +2,8 @@
 import auth
 import migration
 import backup
+import currencies
+import server_backup
 from contextvars import ContextVar
 import calendar
 import csv
@@ -28,6 +30,7 @@ PASSWORD = os.environ.get('APP_PASSWORD', '')
 SESSIONS = {}
 ATTEMPTS = {}
 LOCK = threading.Lock()
+SERVER_LOCK = threading.RLock()
 USER_DATA_LOCKS = {}
 
 def user_data_lock(user_id):
@@ -60,6 +63,7 @@ def db():
 
 def init():
     DATA.mkdir(parents=True, exist_ok=True)
+    if CURRENT_USER.get()==1: server_backup.recover(DATA)
     with db() as c:
         fresh_categories = not c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='categories'").fetchone()
         c.executescript('''
@@ -74,6 +78,7 @@ def init():
           imported_id TEXT, transfer_id TEXT, batch_id TEXT);
         CREATE UNIQUE INDEX IF NOT EXISTS import_id ON transactions(account_id,imported_id) WHERE imported_id IS NOT NULL;
         CREATE INDEX IF NOT EXISTS tx_date ON transactions(date);
+        CREATE TABLE IF NOT EXISTS preferences(key TEXT PRIMARY KEY,value TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS restore_previews(id TEXT PRIMARY KEY, created REAL NOT NULL, payload TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS previews(id TEXT PRIMARY KEY, created REAL NOT NULL, payload TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS profiles(name TEXT PRIMARY KEY, mapping TEXT NOT NULL);
@@ -84,6 +89,7 @@ def init():
         ''')
         if 'archived' not in {r['name'] for r in c.execute('PRAGMA table_info(accounts)')}:
             c.execute('ALTER TABLE accounts ADD COLUMN archived INTEGER NOT NULL DEFAULT 0')
+        c.execute("INSERT OR IGNORE INTO preferences VALUES ('currency',?)",(server_backup.default_currency(DATA,CURRENCY),))
         if fresh_categories:
             c.executemany('INSERT INTO categories(name) VALUES (?)', [(v,) for v in ['Housing','Groceries','Dining out','Transportation','Utilities','Shopping','Health','Entertainment','Subscriptions','Travel','Other']])
 
@@ -510,7 +516,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_DELETE(self): self.handle_request('DELETE')
     def handle_request(self,method):
         token=CURRENT_USER.set(1)
-        try: self.dispatch(method)
+        try:
+            with SERVER_LOCK:
+                server_backup.recover(DATA)
+                self.dispatch(method)
         finally: CURRENT_USER.reset(token)
     def dispatch(self,method):
         from urllib.parse import urlsplit,parse_qs
@@ -527,7 +536,7 @@ class Handler(BaseHTTPRequestHandler):
                 if self.headers.get('X-Requested-With')!='MonthlySpend':
                     return self.send(403,{'error':'Request rejected.'})
                 length=int(self.headers.get('Content-Length','0'))
-                limit=110*1024*1024 if path=='/api/backup/preview' else 4_000_000
+                limit=110*1024*1024 if path in ('/api/backup/preview','/api/server-backup/preview') else 4_000_000
                 if length<0 or length>limit: return self.send(413,{'error':'Request exceeds the allowed size.'})
                 data=json.loads(self.rfile.read(length) or b'{}')
                 if not isinstance(data,dict): raise Invalid('Expected an object.')
@@ -594,11 +603,28 @@ class Handler(BaseHTTPRequestHandler):
                 ck=SimpleCookie(self.headers.get('Cookie',''))
                 with LOCK: SESSIONS.pop(ck['session'].value,None)
                 return self.send(200,{'ok':True},cookie='session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0')
+            if path.startswith('/api/server-backup'):
+                if not self.user['is_admin']: return self.send(403,{'error':'Administrator access required.'})
+                if path=='/api/server-backup' and method=='GET':
+                    return self.send(200,server_backup.export(DATA,CURRENCY),'text/csv; charset=utf-8')
+                if path=='/api/server-backup/preview' and method=='POST':
+                    return self.send(200,server_backup.preview(DATA,data.get('text'),self.user['id']))
+                if path=='/api/server-backup/restore' and method=='POST':
+                    server_backup.restore(DATA,data,self.user['id'])
+                    with LOCK: SESSIONS.clear();ATTEMPTS.clear()
+                    return self.send(200,{'ok':True},cookie='session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0')
+                return self.send(404,{'error':'Not found.'})
             with db() as c:
+                currency=currencies.get(c,CURRENCY)
+                if path=='/api/profile' and method=='POST':
+                    if data.get('confirmed') is not True: raise Invalid('Confirm that changing currency does not convert existing amounts.')
+                    currencies.set_currency(c,data.get('currency'))
+                    c.commit()
+                    return self.send(200,{'ok':True})
                 if path=='/api/backup' and method=='GET':
-                    return self.send(200,backup.export(c,CURRENCY),'text/csv; charset=utf-8')
+                    return self.send(200,backup.export(c,currency),'text/csv; charset=utf-8')
                 if path=='/api/backup/preview' and method=='POST':
-                    result=backup.preview(c,data.get('text'),CURRENCY)
+                    result=backup.preview(c,data.get('text'),currency)
                     c.commit()
                     return self.send(200,result)
                 if path=='/api/backup/restore' and method=='POST':
@@ -607,7 +633,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send(200,result)
                 if path=='/api/state' and method=='GET':
                     accounts=[dict(r) for r in c.execute('SELECT a.*, ap.profile_name default_profile, COUNT(t.id) transaction_count, a.opening+COALESCE(SUM(t.amount),0) balance FROM accounts a LEFT JOIN account_profiles ap ON ap.account_id=a.id LEFT JOIN transactions t ON t.account_id=a.id GROUP BY a.id ORDER BY a.name')]
-                    return self.send(200,dict(user=self.user,currency=CURRENCY,accounts=[a for a in accounts if not a['archived']],archived_accounts=[a for a in accounts if a['archived']],categories=[dict(r) for r in c.execute('SELECT * FROM categories ORDER BY name')],profiles=[dict(name=r['name'],mapping=json.loads(r['mapping'])) for r in c.execute('SELECT * FROM profiles ORDER BY name')],rules=[dict(r) for r in c.execute('SELECT r.*, c.name category FROM rules r JOIN categories c ON c.id=r.category_id ORDER BY r.id')]))
+                    return self.send(200,dict(user=self.user,currency=currency,currencies=currencies.SUPPORTED,accounts=[a for a in accounts if not a['archived']],archived_accounts=[a for a in accounts if a['archived']],categories=[dict(r) for r in c.execute('SELECT * FROM categories ORDER BY name')],profiles=[dict(name=r['name'],mapping=json.loads(r['mapping'])) for r in c.execute('SELECT * FROM profiles ORDER BY name')],rules=[dict(r) for r in c.execute('SELECT r.*, c.name category FROM rules r JOIN categories c ON c.id=r.category_id ORDER BY r.id')]))
                 if path=='/api/month' and method=='GET':
                     month=parse_qs(url.query).get('month',[date.today().strftime('%Y-%m')])[0]
                     report=summary(c,month)
@@ -754,6 +780,7 @@ class Handler(BaseHTTPRequestHandler):
 if __name__=='__main__':
     if len(PASSWORD)<12:
         raise SystemExit('Set APP_PASSWORD to at least 12 characters before starting.')
+    server_backup.recover(DATA)
     migration.migrate_all(DATA)
     init()
     auth.init(DATA,PASSWORD,ADMIN_USERNAME)

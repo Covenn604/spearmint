@@ -8,7 +8,7 @@ import sqlite3
 import time
 from datetime import date
 
-TABLES = ('accounts','categories','profiles','rules','account_profiles','transactions')
+TABLES = ('accounts','categories','profiles','rules','account_profiles','transactions','preferences')
 HEADER = ['record_type','data']
 MAX_BYTES = 50 * 1024 * 1024
 csv.field_size_limit(MAX_BYTES)
@@ -26,7 +26,7 @@ def export(c,currency):
     # One read transaction keeps all related tables in the same snapshot.
     c.execute('BEGIN')
     records={table:[dict(r) for r in c.execute('SELECT * FROM '+table+' ORDER BY 1')] for table in TABLES}
-    manifest={'format':'spearmint-financial-backup','version':1,'currency':currency,
+    manifest={'format':'spearmint-financial-backup','version':2,'currency':currency,
               'counts':{t:len(records[t]) for t in TABLES},'sha256':checksum(records)}
     output=io.StringIO(newline='');writer=csv.writer(output)
     writer.writerow(HEADER);writer.writerow(['manifest',canonical(manifest)])
@@ -46,17 +46,20 @@ def parse(text,currency):
         first=next(reader)
         if len(first)!=2 or first[0]!='manifest': raise ValueError('Backup manifest is missing.')
         manifest=json.loads(first[1]);records={t:[] for t in TABLES}
-        if not isinstance(manifest,dict) or manifest.get('format')!='spearmint-financial-backup' or type(manifest.get('version')) is not int or manifest['version']!=1:
+        if not isinstance(manifest,dict) or manifest.get('format')!='spearmint-financial-backup' or type(manifest.get('version')) is not int or manifest['version'] not in (1,2):
             raise ValueError('Unsupported Spearmint backup format or version.')
         if manifest.get('currency')!=currency: raise ValueError('Backup currency does not match this installation. No currency conversion is performed.')
+        if manifest['version']==1: records.pop('preferences')
         for row in reader:
             if not row: continue
-            if len(row)!=2 or row[0] not in TABLES: raise ValueError('Unexpected backup record.')
+            if len(row)!=2 or row[0] not in records: raise ValueError('Unexpected backup record.')
             record=json.loads(row[1])
             if not isinstance(record,dict): raise ValueError('Invalid backup record.')
             records[row[0]].append(record)
-        if manifest.get('counts')!={t:len(records[t]) for t in TABLES} or manifest.get('sha256')!=checksum(records):
+        if manifest.get('counts')!={t:len(records[t]) for t in records} or manifest.get('sha256')!=checksum(records):
             raise ValueError('Backup is incomplete or changed. Restore an unmodified Spearmint backup.')
+        if manifest['version']==1: records['preferences']=[{'key':'currency','value':currency}]
+        if records['preferences']!=[{'key':'currency','value':currency}]: raise ValueError('Backup currency records do not match the manifest.')
         return records
     except (StopIteration,csv.Error,json.JSONDecodeError,UnicodeError,RecursionError) as error:
         raise ValueError('The backup CSV is malformed or incomplete.') from error
@@ -75,6 +78,8 @@ def populate(c,records):
                     if column[3] or column[5]: raise ValueError('A required backup field is empty.')
                 elif ('INT' in column[2] and type(value) is not int) or ('TEXT' in column[2] and not isinstance(value,str)):
                     raise ValueError('A backup field has the wrong data type.')
+            if table=='preferences' and (record['key']!='currency' or not (len(record['value'])==3 and record['value'].isascii() and record['value'].isalpha() and record['value'].isupper())):
+                raise ValueError('Invalid profile preference.')
             if table=='accounts' and record['archived'] not in (0,1): raise ValueError('Invalid archived account status.')
             if table=='profiles' and not isinstance(json.loads(record['mapping']),dict): raise ValueError('Invalid saved CSV mapping.')
             if table=='transactions' and date.fromisoformat(record['date']).isoformat()!=record['date']: raise ValueError('Invalid transaction date.')

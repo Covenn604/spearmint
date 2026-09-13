@@ -1,4 +1,7 @@
 import copy
+import csv
+import io
+import json
 import unittest
 from unittest.mock import patch
 import app
@@ -20,6 +23,15 @@ class BackupTests(DatabaseFixture):
             c.execute("INSERT INTO rules VALUES (42,'café',2)")
             for account,amount in ((1,-1234),(2,1234)):
                 app.insert(c,dict(account_id=account,date='2026-09-13',payee='=Café, "quoted"',amount=amount,kind='transfer',category_id=None,note='Line one\r\nLine two ☕',imported_id='bank-id'),transfer_id='pair',batch_id='batch')
+
+    def test_legacy_v1_backup_restores_with_current_currency(self):
+        records=self.snapshot();records.pop('preferences')
+        out=io.StringIO(newline='');w=csv.writer(out);w.writerow(backup.HEADER)
+        w.writerow(['manifest',json.dumps({'format':'spearmint-financial-backup','version':1,'currency':app.CURRENCY,'counts':{t:len(r) for t,r in records.items()},'sha256':backup.checksum(records)})])
+        for t,rows in records.items():
+            for r in rows:w.writerow([t,json.dumps(r)])
+        parsed=backup.parse(out.getvalue(),app.CURRENCY)
+        self.assertEqual(parsed,self.snapshot())
 
     def test_exact_round_trip_and_token_replay(self):
         self.seed(); before=self.snapshot()

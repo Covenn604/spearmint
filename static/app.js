@@ -1,6 +1,7 @@
 'use strict';
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let serverText='',serverPreview=null,serverRequest=0;
 let recoveryToken='',resetToken='',restoreText='',restorePreview=null,restoreRequest=0;
 let state, report, csvText='', csvHeaders=[], importPreview=null, view='overview', noticeTimer;
 let allTransactions=[], selectedTransactions=new Set(), scopeRequest=0, headerRequest=0, previewRequest=0, importProfileAccount=null;
@@ -9,6 +10,8 @@ function syncMonthControl(){$('#month').disabled=view==='transactions'&&$('#tran
 const localDay=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
 $('#month').value=localDay().slice(0,7);
 function clearPrivateState(){
+ serverText='';serverPreview=null;++serverRequest;$('#server-file').value='';$('#server-confirm').value='';$('#server-review').hidden=true;$('#server-summary').textContent='';$('#server-validate').disabled=true;$('#admin-nav').hidden=true;
+
  restoreText='';restorePreview=null;++restoreRequest;$('#restore-file').value='';$('#restore-review').hidden=true;$('#restore-summary').textContent='';$('#preview-restore').disabled=true;$('#backup-dialog').close();
  recoveryToken='';resetToken='';$('#setup-form').reset();$('#account-setup').hidden=true;$('#recovery').hidden=true;
  importProfileAccount=null;++previewRequest;
@@ -25,9 +28,10 @@ function money(cents){return new Intl.NumberFormat('en-CA',{style:'currency',cur
 function moneyHtml(cents){return `<span class="${cents<0?'money-negative':'money-value'}">${esc(money(cents))}</span>`;}
 
 function opts(items,value='',blank='Choose…'){return `<option value="">${esc(blank)}</option>`+items.map(x=>`<option value="${esc(x.id)}" ${String(x.id)===String(value)?'selected':''}>${esc(x.name)}</option>`).join('');}
-function setView(name){view=name;document.querySelectorAll('.view').forEach(el=>el.hidden=el.id!==name);document.querySelectorAll('nav button').forEach(b=>{b.classList.toggle('active',b.dataset.view===name);if(b.dataset.view===name)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});$('#page-title').textContent={overview:'Monthly overview',transactions:'Transactions',import:'Import transactions',accounts:'Accounts & categories',settings:'Profile & users'}[name];syncMonthControl();}
+function setView(name){view=name;document.querySelectorAll('.view').forEach(el=>el.hidden=el.id!==name);document.querySelectorAll('nav button').forEach(b=>{b.classList.toggle('active',b.dataset.view===name);if(b.dataset.view===name)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});$('#page-title').textContent={overview:'Monthly overview',transactions:'Transactions',import:'Import transactions',accounts:'Accounts & categories',settings:'Profile',administration:'Administration'}[name];syncMonthControl();}
 async function refresh(){const session=await api('/api/auth-state');if(session.user.setup_required){showSetup(session.questions);return;}$('#account-setup').hidden=true;state=await api('/api/state');report=await api('/api/month?month='+encodeURIComponent($('#month').value));if($('#transaction-scope').value==='all')allTransactions=(await api('/api/transactions')).transactions;$('#login').hidden=true;$('#shell').hidden=false;renderState();renderOverview();renderTransactions();await renderUsers();if(importProfileAccount!==$('#import-account').value)await selectAccountProfile();else updateProfileControls();}
 function renderState(){
+ $('#profile-currency').innerHTML=Object.entries(state.currencies).map(([code,name])=>`<option value="${esc(code)}">${esc(code)} — ${esc(name)}</option>`).join('');$('#profile-currency').value=state.currency;
  $('#currency-note').textContent=`${state.user.username} · ${state.currency}`;
  for(const id of ['tx-account','tx-destination','import-account']){const el=$('#'+id),old=el.value;el.innerHTML=opts(state.accounts,old);if(!el.value&&state.accounts.length)el.value=state.accounts[0].id;}
  const bulk=$('#bulk-category'),oldBulk=bulk.value;bulk.innerHTML=opts(state.categories,oldBulk,'Choose category…')+'<option value="none">Uncategorized</option>';bulk.value=oldBulk;
@@ -159,7 +163,8 @@ $('#apply-category').onclick=async e=>{
 };
 async function renderUsers(){
  $('#profile-identity').textContent=`Signed in as ${state.user.username}${state.user.is_admin?' · Administrator':''}`;
- $('#user-admin').hidden=!state.user.is_admin;
+ $('#user-admin').hidden=!state.user.is_admin;$('#admin-nav').hidden=!state.user.is_admin;
+ if(!state.user.is_admin&&view==='administration')setView('overview');
  $('#users-list').replaceChildren();$('#manage-user').replaceChildren();
  if(!state.user.is_admin)return;
  const {users}=await api('/api/users');
@@ -341,3 +346,25 @@ enableDesktopUpdates();
 window.addEventListener('spearmint-update-status',e=>{const {message,busy}=e.detail;const dialog=$('#desktop-update-progress');$('#desktop-update-message').textContent=message;if(busy){if(!dialog.open)dialog.showModal();}else{if(dialog.open)dialog.close();notify(message);}});
 $('#desktop-update-progress').addEventListener('cancel',e=>e.preventDefault());
 $('#check-updates').onclick=()=>task(async()=>{await window.pywebview.api.check_updates();});
+
+$('#currency-form').onsubmit=e=>{e.preventDefault();const currency=$('#profile-currency').value;if(currency===state.currency)return;if(!confirm(`Change your profile currency to ${currency}? Existing amounts will stay the same; no currency conversion will occur.`))return;task(async()=>{await api('/api/profile','POST',{currency,confirmed:true});restorePreview=null;$('#restore-review').hidden=true;await refresh();notify('Profile currency updated.');},e.submitter);};
+$('#server-download').onclick=e=>task(async()=>{
+ const response=await fetch('/api/server-backup');if(!response.ok){const r=await response.json();throw Error(r.error);}
+ if(window.pywebview?.api?.save_server_backup){const result=await window.pywebview.api.save_server_backup(await response.text());if(result.saved)notify('Saved '+result.filename);return;}
+ const url=URL.createObjectURL(await response.blob()),a=document.createElement('a');a.href=url;a.download='spearmint-server-backup.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+},e.currentTarget);
+$('#server-file').onchange=()=>task(async()=>{
+ const request=++serverRequest;serverPreview=null;serverText='';$('#server-review').hidden=true;$('#server-confirm').value='';$('#server-validate').disabled=true;
+ const file=$('#server-file').files[0];if(!file)return;if(file.size>50*1024*1024)throw Error('Choose a backup no larger than 50 MB.');
+ const text=decodeCsvBytes(await file.arrayBuffer());if(request!==serverRequest)return;serverText=text;$('#server-validate').disabled=false;
+});
+$('#server-validate').onclick=e=>task(async()=>{
+ const request=++serverRequest;serverPreview=null;$('#server-review').hidden=true;$('#server-confirm').value='';
+ const result=await api('/api/server-backup/preview','POST',{text:serverText});if(request!==serverRequest)return;
+ serverPreview=result;$('#server-summary').textContent=`Validated server backup: ${result.users} users, ${result.ledgers} financial databases, ${result.transactions} transactions. All current users and saved data will be replaced. This cannot be undone.`;$('#server-review').hidden=false;
+},e.currentTarget);
+$('#server-restore').onclick=e=>task(async()=>{
+ if(!serverPreview)throw Error('Validate the server backup first.');const confirmation=$('#server-confirm').value;if(confirmation!=='RESTORE SERVER')throw Error('Type RESTORE SERVER to confirm.');
+ if(!confirm('Permanently replace the complete server with this backup and sign everyone out?'))return;
+ await api('/api/server-backup/restore','POST',{token:serverPreview.token,confirmation});clearPrivateState();$('#shell').hidden=true;$('#login').hidden=false;notify('Server restored. Sign in using credentials from the backup.');
+},e.currentTarget);

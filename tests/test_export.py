@@ -40,6 +40,13 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(target.read_bytes(),text.encode('utf-8'))
         self.assertEqual(self.window.create_file_dialog.call_args.kwargs['save_filename'],'spearmint-backup.csv')
 
+    def test_server_backup_uses_distinct_native_filename(self):
+        target=self.folder/'server.csv'
+        self.window.create_file_dialog.return_value=(str(target),)
+        self.assertTrue(self.api.save_server_backup('server data')['saved'])
+        self.assertEqual(target.read_text(),'server data')
+        self.assertEqual(self.window.create_file_dialog.call_args.kwargs['save_filename'],'spearmint-server-backup.csv')
+
     def test_failed_replace_preserves_existing_file_and_cleans_up(self):
         target = self.folder / 'existing.csv'
         target.write_bytes(b'existing data')
