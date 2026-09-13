@@ -1,7 +1,7 @@
 'use strict';
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let recoveryToken='',resetToken='';
+let recoveryToken='',resetToken='',restoreText='',restorePreview=null,restoreRequest=0;
 let state, report, csvText='', csvHeaders=[], importPreview=null, view='overview', noticeTimer;
 let allTransactions=[], selectedTransactions=new Set(), scopeRequest=0, headerRequest=0, previewRequest=0, importProfileAccount=null;
 function transactionRows(){return $('#transaction-scope').value==='all'?allTransactions:(report?.transactions||[]);}
@@ -9,6 +9,7 @@ function syncMonthControl(){$('#month').disabled=view==='transactions'&&$('#tran
 const localDay=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
 $('#month').value=localDay().slice(0,7);
 function clearPrivateState(){
+ restoreText='';restorePreview=null;++restoreRequest;$('#restore-file').value='';$('#restore-review').hidden=true;$('#restore-summary').textContent='';$('#preview-restore').disabled=true;$('#backup-dialog').close();
  recoveryToken='';resetToken='';$('#setup-form').reset();$('#account-setup').hidden=true;$('#recovery').hidden=true;
  importProfileAccount=null;++previewRequest;
  state=null;report=null;allTransactions=[];csvText='';csvHeaders=[];importPreview=null;selectedTransactions.clear();scopeRequest++;headerRequest++;
@@ -304,7 +305,34 @@ $('#clear-default-profile').onclick=e=>task(async()=>{
 },e.currentTarget);
 $('#preview-csv').onclick=e=>task(async()=>{const request=++previewRequest;const result=await api('/api/csv/preview','POST',{text:csvText,account_id:$('#import-account').value,mapping:mapping()});if(request!==previewRequest)return;importPreview=result;renderPreview();},e.currentTarget);
 $('#commit-csv').onclick=e=>task(async()=>{if(!importPreview)throw Error('Preview the file again.');const selected=[...$('#review-body').querySelectorAll('tr[data-index]')].filter(tr=>tr.querySelector('.include-row').checked).map(tr=>({index:Number(tr.dataset.index),kind:tr.querySelector('.import-kind').value,category_id:tr.querySelector('.import-category').value,allow_possible:importPreview.rows[Number(tr.dataset.index)].status==='possible'}));if(!selected.length)throw Error('Select at least one row.');const similar=selectedSimilarGroups(importPreview.rows,selected);for(const group of similar){if(!confirm(`This import contains ${group.count} selected new transactions for “${group.tx.payee}” on ${group.tx.date}, each for ${money(group.tx.amount)}.\n\nAdd all ${group.count} as separate transactions? Choose Cancel to review your selections.`))return;}if(!confirm(`Import ${selected.length} transactions into ${state.accounts.find(a=>String(a.id)===$('#import-account').value)?.name}? Selected possible duplicates will be added as separate transactions.`))return;const result=await api('/api/csv/commit','POST',{token:importPreview.token,selected,confirmed_similar_groups:similar.map(g=>g.id)});invalidatePreview();$('#import-result').innerHTML=`<div class="panel"><strong>${result.imported} transactions imported.</strong> <button class="secondary" id="undo-import">Undo this import</button></div>`;$('#undo-import').onclick=()=>{if(confirm('Remove all transactions from this import, including any later edits to them?'))task(async()=>{await api('/api/imports/'+result.batch_id,'DELETE',{});$('#import-result').replaceChildren();await refresh();notify('Import undone.');});};await refresh();notify('Import complete. Choose the statement month to view it.');},e.currentTarget);
-$('#export').onclick=()=>task(async()=>{const response=await fetch('/api/export');if(!response.ok)throw Error('Please sign in again to export.');if(window.pywebview?.api?.save_export){const result=await window.pywebview.api.save_export(await response.text());if(result.saved)notify('Saved '+result.filename);return;}const blob=await response.blob(),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='spearmint-transactions.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);},$('#export'));
+$('#export').onclick=()=>$('#backup-dialog').showModal();
+$('#close-backup').onclick=()=>$('#backup-dialog').close();
+$('#download-backup').onclick=e=>task(async()=>{
+ const response=await fetch('/api/backup');
+ if(!response.ok){const error=await response.json();throw Error(error.error||'Could not create backup.');}
+ if(window.pywebview?.api?.save_backup){const result=await window.pywebview.api.save_backup(await response.text());if(result.saved)notify('Saved '+result.filename);return;}
+ const url=URL.createObjectURL(await response.blob()),a=document.createElement('a');a.href=url;a.download='spearmint-backup.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+},e.currentTarget);
+$('#restore-file').onchange=()=>task(async()=>{
+ const request=++restoreRequest;restoreText='';restorePreview=null;$('#restore-review').hidden=true;$('#preview-restore').disabled=true;
+ const file=$('#restore-file').files[0];if(!file)return;
+ if(file.size>50*1024*1024)throw Error('Choose a backup no larger than 50 MB.');
+ const text=decodeCsvBytes(await file.arrayBuffer());if(request!==restoreRequest)return;
+ restoreText=text;$('#preview-restore').disabled=false;
+});
+$('#preview-restore').onclick=e=>task(async()=>{
+ const request=++restoreRequest;restorePreview=null;$('#restore-review').hidden=true;
+ const result=await api('/api/backup/preview','POST',{text:restoreText});if(request!==restoreRequest)return;
+ restorePreview=result;const c=result.counts;
+ $('#restore-summary').textContent=`Validated ${result.currency} backup: ${c.accounts} accounts, ${c.transactions} transactions, ${c.categories} categories, ${c.rules} merchant rules, ${c.profiles} saved mappings, and ${c.account_profiles} account mapping defaults.`;
+ $('#restore-review').hidden=false;
+},e.currentTarget);
+$('#commit-restore').onclick=e=>task(async()=>{
+ if(!restorePreview)throw Error('Validate the backup first.');
+ if(!confirm('Replace all your current financial data with this backup? This cannot be undone. Your login will not change.'))return;
+ await api('/api/backup/restore','POST',{token:restorePreview.token,confirmed:true});
+ clearPrivateState();await refresh();notify('Backup restored. All financial records and import settings have been restored.');
+},e.currentTarget);
 refresh().catch(e=>{if(e.message!=='Please sign in.')notify(e.message);});
 
 function enableDesktopUpdates(){if(window.pywebview?.api?.check_updates)$('#check-updates').hidden=false;}

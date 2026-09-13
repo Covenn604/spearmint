@@ -1,6 +1,7 @@
 """Spearmint: independent, self-hosted spending tracker inspired by Mint."""
 import auth
 import migration
+import backup
 from contextvars import ContextVar
 import calendar
 import csv
@@ -73,6 +74,7 @@ def init():
           imported_id TEXT, transfer_id TEXT, batch_id TEXT);
         CREATE UNIQUE INDEX IF NOT EXISTS import_id ON transactions(account_id,imported_id) WHERE imported_id IS NOT NULL;
         CREATE INDEX IF NOT EXISTS tx_date ON transactions(date);
+        CREATE TABLE IF NOT EXISTS restore_previews(id TEXT PRIMARY KEY, created REAL NOT NULL, payload TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS previews(id TEXT PRIMARY KEY, created REAL NOT NULL, payload TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS profiles(name TEXT PRIMARY KEY, mapping TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS account_profiles(
@@ -525,7 +527,8 @@ class Handler(BaseHTTPRequestHandler):
                 if self.headers.get('X-Requested-With')!='MonthlySpend':
                     return self.send(403,{'error':'Request rejected.'})
                 length=int(self.headers.get('Content-Length','0'))
-                if length<0 or length>4_000_000: return self.send(413,{'error':'Request exceeds 4 MB.'})
+                limit=110*1024*1024 if path=='/api/backup/preview' else 4_000_000
+                if length<0 or length>limit: return self.send(413,{'error':'Request exceeds the allowed size.'})
                 data=json.loads(self.rfile.read(length) or b'{}')
                 if not isinstance(data,dict): raise Invalid('Expected an object.')
             if path.startswith('/api/recovery/') and method=='POST':
@@ -592,6 +595,16 @@ class Handler(BaseHTTPRequestHandler):
                 with LOCK: SESSIONS.pop(ck['session'].value,None)
                 return self.send(200,{'ok':True},cookie='session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0')
             with db() as c:
+                if path=='/api/backup' and method=='GET':
+                    return self.send(200,backup.export(c,CURRENCY),'text/csv; charset=utf-8')
+                if path=='/api/backup/preview' and method=='POST':
+                    result=backup.preview(c,data.get('text'),CURRENCY)
+                    c.commit()
+                    return self.send(200,result)
+                if path=='/api/backup/restore' and method=='POST':
+                    result=backup.restore(c,data)
+                    c.commit()
+                    return self.send(200,result)
                 if path=='/api/state' and method=='GET':
                     accounts=[dict(r) for r in c.execute('SELECT a.*, ap.profile_name default_profile, COUNT(t.id) transaction_count, a.opening+COALESCE(SUM(t.amount),0) balance FROM accounts a LEFT JOIN account_profiles ap ON ap.account_id=a.id LEFT JOIN transactions t ON t.account_id=a.id GROUP BY a.id ORDER BY a.name')]
                     return self.send(200,dict(user=self.user,currency=CURRENCY,accounts=[a for a in accounts if not a['archived']],archived_accounts=[a for a in accounts if a['archived']],categories=[dict(r) for r in c.execute('SELECT * FROM categories ORDER BY name')],profiles=[dict(name=r['name'],mapping=json.loads(r['mapping'])) for r in c.execute('SELECT * FROM profiles ORDER BY name')],rules=[dict(r) for r in c.execute('SELECT r.*, c.name category FROM rules r JOIN categories c ON c.id=r.category_id ORDER BY r.id')]))

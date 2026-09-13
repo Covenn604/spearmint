@@ -16,7 +16,7 @@ import auth
 from desktop.export_api import ExportApi, DesktopApi
 from desktop.updater import UpdateManager
 
-VERSION = '0.5.5'
+VERSION = '0.5.6'
 
 def icon_path():
     return app.ROOT/'static'/'spearmint.ico' if getattr(sys,'frozen',False) else Path(__file__).parent/'spearmint.ico'
@@ -218,6 +218,12 @@ def ui_smoke_test():
                         raise RuntimeError('Account management controls did not render.')
                     window.evaluate_js("document.querySelector('#account-edit-name').value='Renamed smoke account';document.querySelector('#account-edit-opening').value='25';document.querySelector('#account-edit-form').requestSubmit()")
                     wait_for("!document.querySelector('#account-edit-dialog').open && state.accounts.some(a=>a.name==='Renamed smoke account' && a.opening===2500)")
+                    window.evaluate_js("document.querySelector('#export').click()")
+                    wait_for("document.querySelector('#backup-dialog').open && typeof window.pywebview.api.save_backup==='function'")
+                    window.evaluate_js("fetch('/api/backup').then(r=>r.text()).then(text=>{restoreText=text;document.querySelector('#preview-restore').disabled=false;document.querySelector('#preview-restore').click()})")
+                    wait_for("restorePreview && !document.querySelector('#restore-review').hidden")
+                    window.evaluate_js("window.confirm=()=>true;document.querySelector('#commit-restore').click()")
+                    wait_for("!document.querySelector('#backup-dialog').open && state && state.accounts.some(a=>a.name==='Renamed smoke account' && a.opening===2500)")
                     outcome.append(True)
                 finally:
                     window.destroy()

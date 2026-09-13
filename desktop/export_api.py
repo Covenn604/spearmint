@@ -11,6 +11,12 @@ class ExportApi:
         self._lock = threading.Lock()
 
     def save_export(self, csv_text):
+        return self._save_csv(csv_text,'spearmint-transactions.csv')
+
+    def save_backup(self, csv_text):
+        return self._save_csv(csv_text,'spearmint-backup.csv')
+
+    def _save_csv(self, csv_text, filename):
         import webview
         if not isinstance(csv_text, str):
             raise ValueError('The transaction export is not valid text.')
@@ -19,7 +25,7 @@ class ExportApi:
         temporary = None
         try:
             selected = self._window.create_file_dialog(
-                webview.FileDialog.SAVE, save_filename='spearmint-transactions.csv',
+                webview.FileDialog.SAVE, save_filename=filename,
                 file_types=('CSV files (*.csv)',),
             )
             if not selected:

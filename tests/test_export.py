@@ -32,6 +32,14 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(target.read_bytes(), csv.encode('utf-8'))
         self.assertEqual(self.window.create_file_dialog.call_args.kwargs['save_filename'], 'spearmint-transactions.csv')
 
+    def test_backup_uses_native_save_dialog_and_preserves_bytes(self):
+        target = self.folder / 'backup.csv'
+        self.window.create_file_dialog.return_value = (str(target),)
+        text = 'record_type,data\r\nmanifest,"é"\r\n'
+        self.assertTrue(self.api.save_backup(text)['saved'])
+        self.assertEqual(target.read_bytes(),text.encode('utf-8'))
+        self.assertEqual(self.window.create_file_dialog.call_args.kwargs['save_filename'],'spearmint-backup.csv')
+
     def test_failed_replace_preserves_existing_file_and_cleans_up(self):
         target = self.folder / 'existing.csv'
         target.write_bytes(b'existing data')
