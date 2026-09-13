@@ -19,3 +19,5 @@ button.danger{background:#b72f45}#category-dialog hr{border:0;border-top:1px sol
 .transaction-notes{white-space:pre-wrap;overflow-wrap:anywhere;min-width:160px;max-width:320px;color:var(--muted)}
 
 #setup-questions,#recovery-questions{display:grid;gap:15px}.login>.secondary{margin-top:16px}
+
+#account-edit-dialog hr{border:0;border-top:1px solid var(--line);margin:25px 0}.archived-heading{margin:24px 0 0;font-size:16px}

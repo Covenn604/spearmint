@@ -6,7 +6,7 @@ Spearmint is a self-hosted spending tracker inspired by Mint. Record your transa
 
 Use it from a computer or phone on your home network. Import bank statements or enter transactions manually; your financial records stay on your server.
 
-**Current version: 0.5.4** · [Docker image](https://github.com/Covenn604/spearmint/pkgs/container/spearmint) · [Report an issue](https://github.com/Covenn604/spearmint/issues)
+**Current version: 0.5.5** · [Docker image](https://github.com/Covenn604/spearmint/pkgs/container/spearmint) · [Report an issue](https://github.com/Covenn604/spearmint/issues)
 
 Spearmint is an independent project and is not affiliated with Mint or Intuit. It is an early-stage application intended for personal use on a trusted network.
 
@@ -36,7 +36,7 @@ Financial data is stored in `%LOCALAPPDATA%\Spearmint\data`. The backend listens
 
 To back up Windows data, close Spearmint and copy the entire data folder to a separate backup location. To restore, close the app and restore a complete backup to that folder. Install a newer installer over the existing installation to update. Uninstall removes program files and shortcuts but preserves financial data. **Export transactions** opens a Windows Save As dialog so you can choose the CSV filename and destination. The Windows app checks GitHub Releases on startup and hourly while open. New stable releases prompt you to update; declining silences automatic prompts for 24 hours, including across restarts. **Check for updates** performs an immediate check even during that pause. Accepting downloads and verifies the installer against GitHub’s SHA-256 digest, closes the app, installs into the existing program directory, and reopens Spearmint. Saved data is preserved; save any form edits before accepting. Offline or failed background checks do not interrupt normal use. Download or verification failures leave the running version in place. There is no synchronization between installations.
 
-Install v0.5.4 manually once to enable future updates. The updater only uses published, non-prerelease GitHub Releases with a newer version and a matching `Spearmint-<version>-Windows-x64-Setup.exe` asset containing a GitHub SHA-256 digest. Supported tags include `0.5.4`, `v0.5.4`, and `Spearmint-v0.5.4`. Actions artifacts and Docker images do not trigger Windows prompts. Continue uploading the installer to Releases when publishing a Windows version. Update preferences, staged installers, and `install.log` are stored in `%LOCALAPPDATA%\Spearmint\updates`, separately from financial data. Docker has no automatic update checks.
+Versions before v0.5.4 require one manual update to enable future automatic updates. The updater only uses published, non-prerelease GitHub Releases with a newer version and a matching `Spearmint-<version>-Windows-x64-Setup.exe` asset containing a GitHub SHA-256 digest. Supported tags include `0.5.5`, `v0.5.5`, and `Spearmint-v0.5.5`. Actions artifacts and Docker images do not trigger Windows prompts. Continue uploading the installer to Releases when publishing a Windows version. Update preferences, staged installers, and `install.log` are stored in `%LOCALAPPDATA%\Spearmint\updates`, separately from financial data. Docker has no automatic update checks.
 
 The Windows workflow tests the packaged backend, installed WebView2 login window, installation, and data preservation on uninstall. It cannot replace hands-on testing of first-run setup, CSV file selection, and everyday use on Windows 11. Windows installers are distributed through [GitHub Releases](https://github.com/Covenn604/spearmint/releases).
 
@@ -78,7 +78,7 @@ These variables are read by the supplied Compose file. Set them in `.env` or in 
 | --- | --- | --- |
 | `APP_PASSWORD` | Required | Initial administrator password; at least 12 characters. Changing it later does not reset an existing password. |
 | `ADMIN_USERNAME` | `admin` | Administrator username on first setup. |
-| `APP_IMAGE` | `ghcr.io/covenn604/spearmint:latest` | Image to run. Use `:0.5.4` for the current release tag or a published `:sha-…` tag for a specific source revision. |
+| `APP_IMAGE` | `ghcr.io/covenn604/spearmint:latest` | Image to run. Use `:0.5.5` for the current release tag or a published `:sha-…` tag for a specific source revision. |
 | `APP_PORT` | `8085` | Port exposed on the host; the container listens on `8080`. |
 | `DATA_LOCATION` | `spearmint-data` | Default named volume, or an absolute host directory mounted at `/data`. |
 | `PUID` | `10001` | Numeric user ID for the container process. |
@@ -140,13 +140,25 @@ Balances include future-dated entries and do not change with the selected report
 
 For credit cards, purchases reduce the balance and payments increase it toward zero. Negative amounts are displayed in red with parentheses. For example, **($300.00)** means **$300 owing**. Editable numeric fields and CSV exports retain signed numbers.
 
-Use **Edit opening balance** to correct an account's starting value. The dialog previews the resulting balance. This does not change transactions or monthly spending totals.
+Use **Edit / delete account** to correct an account's starting value. The dialog previews the resulting balance. This does not change transactions or monthly spending totals.
 
 If you deliberately want to adjust the starting value to match a target balance, use:
 
 **Opening balance = target signed balance − net recorded activity**
 
 An adjustment can align the total, but does not resolve missing transactions, duplicates, or reversed import signs. Check those first if an account does not match your statement.
+
+### Editing and deleting accounts
+
+In **Accounts & categories**, choose **Edit / delete account** to change its name or opening balance. Renaming also updates the account name shown on existing transactions.
+
+When deleting, explicitly choose what happens to all of the account’s transactions:
+
+- **Leave them unchanged:** removes the account from active balances and account selectors, retaining an archived reference and its original transaction history. Manage it later under **Archived accounts**. Existing transactions can still be edited; new entries and imports require an active account.
+- **Move them to another account:** moves every transaction to the chosen active account. The source opening balance is not transferred and the destination opening balance stays unchanged. Transfers whose two sides end up in the same account are retained but unlinked. Conflicting import IDs block the move without changing records.
+- **Remove them altogether:** permanently deletes that account’s transactions. Entries in other accounts are preserved, with affected transfer links removed.
+
+A confirmation describes the selected action. Cancel changes nothing. Moving or removing cannot be undone. Saved CSV mappings remain available, but the deleted account’s default association is removed. Pending CSV previews are invalidated. Overview balances recalculate, while retained historical transactions continue to contribute to spending reports.
 
 ### Transfers and credit card payments
 
@@ -408,6 +420,6 @@ The [publishing workflow](.github/workflows/docker-publish.yml) runs on pushes t
 
 ## Current scope
 
-Spearmint currently supports manual entry and CSV imports. Bank synchronization, transaction splits, recurring-bill forecasts, reconciliation workflows, account deletion, multi-currency conversion, category spending limits, shared household workspaces, and automatic pairing of imported transfers are not implemented.
+Spearmint currently supports manual entry and CSV imports. Bank synchronization, transaction splits, recurring-bill forecasts, reconciliation workflows, multi-currency conversion, category spending limits, shared household workspaces, and automatic pairing of imported transfers are not implemented.
 
 For a bug report, include the app version, reproduction steps, and exact error. For CSV problems, provide a small **synthetic** example that preserves the layout and date/amount formats without exposing personal transactions or account details.

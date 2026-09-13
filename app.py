@@ -80,11 +80,13 @@ def init():
           profile_name TEXT NOT NULL REFERENCES profiles(name) ON UPDATE CASCADE ON DELETE CASCADE);
         CREATE TABLE IF NOT EXISTS rules(id INTEGER PRIMARY KEY, contains_text TEXT NOT NULL UNIQUE, category_id INTEGER NOT NULL REFERENCES categories(id));
         ''')
+        if 'archived' not in {r['name'] for r in c.execute('PRAGMA table_info(accounts)')}:
+            c.execute('ALTER TABLE accounts ADD COLUMN archived INTEGER NOT NULL DEFAULT 0')
         if fresh_categories:
             c.executemany('INSERT INTO categories(name) VALUES (?)', [(v,) for v in ['Housing','Groceries','Dining out','Transportation','Utilities','Shopping','Health','Entertainment','Subscriptions','Travel','Other']])
 
 def set_profile_default(c,account_id,name):
-    if not c.execute('SELECT 1 FROM accounts WHERE id=?',(account_id,)).fetchone():
+    if not c.execute('SELECT 1 FROM accounts WHERE id=? AND archived=0',(account_id,)).fetchone():
         raise Invalid('Choose an existing account.')
     if name is None or name=='':
         c.execute('DELETE FROM account_profiles WHERE account_id=?',(account_id,))
@@ -131,6 +133,49 @@ def existing(c, table, key):
     if not c.execute(f'SELECT 1 FROM {table} WHERE id=?', (key,)).fetchone():
         raise Invalid('Choose an existing ' + table[:-1] + '.')
 
+def active_account(c,key):
+    if not c.execute('SELECT 1 FROM accounts WHERE id=? AND archived=0',(key,)).fetchone():
+        raise Invalid('Choose an active account.')
+
+
+def edit_account(c,key,data):
+    row=c.execute('SELECT * FROM accounts WHERE id=?',(key,)).fetchone()
+    if not row: raise Invalid('Account not found.')
+    name=clean(data.get('name',row['name']),80)
+    if not name: raise Invalid('Enter an account name.')
+    opening=money(data['opening']) if 'opening' in data else row['opening']
+    c.execute('UPDATE accounts SET name=?,opening=? WHERE id=?',(name,opening,key))
+
+
+def delete_account(c,key,data):
+    if data.get('confirmed') is not True: raise Invalid('Confirm account deletion.')
+    action=data.get('transactions')
+    if action not in ('keep','move','remove'): raise Invalid('Choose what to do with existing transactions.')
+    c.execute('BEGIN IMMEDIATE')
+    existing(c,'accounts',key)
+    count=c.execute('SELECT COUNT(*) FROM transactions WHERE account_id=?',(key,)).fetchone()[0]
+    if action=='keep':
+        c.execute('UPDATE accounts SET archived=1 WHERE id=?',(key,))
+        c.execute('DELETE FROM account_profiles WHERE account_id=?',(key,))
+    else:
+        if action=='move':
+            destination=int(data.get('destination_id') or 0)
+            if destination==key: raise Invalid('Choose a different destination account.')
+            active_account(c,destination)
+            if c.execute('SELECT 1 FROM transactions s JOIN transactions d ON s.imported_id=d.imported_id WHERE s.account_id=? AND d.account_id=? LIMIT 1',(key,destination)).fetchone():
+                raise Invalid('These accounts contain matching import IDs. Resolve those records or choose another destination before moving.')
+            links=[r[0] for r in c.execute('SELECT DISTINCT transfer_id FROM transactions WHERE account_id=? AND transfer_id IS NOT NULL',(key,))]
+            c.execute('UPDATE transactions SET account_id=? WHERE account_id=?',(destination,key))
+            # Merging both ends into one account preserves the entries but removes the link.
+            c.executemany('UPDATE transactions SET transfer_id=NULL WHERE transfer_id=? AND (SELECT COUNT(DISTINCT account_id) FROM transactions WHERE transfer_id=?)<2',[(link,link) for link in links])
+        else:
+            c.execute('UPDATE transactions SET transfer_id=NULL WHERE account_id!=? AND transfer_id IN (SELECT transfer_id FROM transactions WHERE account_id=? AND transfer_id IS NOT NULL)',(key,key))
+            c.execute('DELETE FROM transactions WHERE account_id=?',(key,))
+        c.execute('DELETE FROM accounts WHERE id=?',(key,))
+    c.execute('DELETE FROM previews')
+    return {'transactions':count,'action':action}
+
+
 def merchant_key(payee):
     return ' '.join(payee.casefold().split())
 
@@ -149,9 +194,10 @@ def category(c, payee, context=None):
             return rule['category_id']
     return history.get(merchant_key(payee))
 
-def transaction(c, data):
+def transaction(c, data, original_account=None):
     account = int(data.get('account_id') or 0)
     existing(c, 'accounts', account)
+    if account!=original_account: active_account(c,account)
     day = valid_date(data.get('date'))
     payee = clean(data.get('payee'))
     if not payee:
@@ -260,7 +306,7 @@ def parse_csv(text, delimiter=',', skip_lines=0, with_lines=False):
 
 def preview(c, data):
     account=int(data.get('account_id') or 0)
-    existing(c,'accounts',account)
+    active_account(c,account)
     mapping=data.get('mapping',{})
     rows,source_lines=parse_csv(data.get('text',''),mapping.get('delimiter',','),mapping.get('skip_lines',0),with_lines=True)
     result=[]
@@ -337,6 +383,7 @@ def commit_import(c,data):
         if index<0 or index>=len(rows): raise Invalid('Invalid row selection.')
         row=rows[index]
         if row['status'] in ('invalid','duplicate'): raise Invalid('A selected row cannot be imported.')
+        active_account(c,row['tx']['account_id'])
         current_status[index]=duplicate(c,row['tx'])
         if row.get('similar_group') is not None:
             group=row['similar_group']
@@ -546,8 +593,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200,{'ok':True},cookie='session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0')
             with db() as c:
                 if path=='/api/state' and method=='GET':
-                    accounts=[dict(r) for r in c.execute('SELECT a.*, ap.profile_name default_profile, a.opening+COALESCE(SUM(t.amount),0) balance FROM accounts a LEFT JOIN account_profiles ap ON ap.account_id=a.id LEFT JOIN transactions t ON t.account_id=a.id GROUP BY a.id ORDER BY a.name')]
-                    return self.send(200,dict(user=self.user,currency=CURRENCY,accounts=accounts,categories=[dict(r) for r in c.execute('SELECT * FROM categories ORDER BY name')],profiles=[dict(name=r['name'],mapping=json.loads(r['mapping'])) for r in c.execute('SELECT * FROM profiles ORDER BY name')],rules=[dict(r) for r in c.execute('SELECT r.*, c.name category FROM rules r JOIN categories c ON c.id=r.category_id ORDER BY r.id')]))
+                    accounts=[dict(r) for r in c.execute('SELECT a.*, ap.profile_name default_profile, COUNT(t.id) transaction_count, a.opening+COALESCE(SUM(t.amount),0) balance FROM accounts a LEFT JOIN account_profiles ap ON ap.account_id=a.id LEFT JOIN transactions t ON t.account_id=a.id GROUP BY a.id ORDER BY a.name')]
+                    return self.send(200,dict(user=self.user,currency=CURRENCY,accounts=[a for a in accounts if not a['archived']],archived_accounts=[a for a in accounts if a['archived']],categories=[dict(r) for r in c.execute('SELECT * FROM categories ORDER BY name')],profiles=[dict(name=r['name'],mapping=json.loads(r['mapping'])) for r in c.execute('SELECT * FROM profiles ORDER BY name')],rules=[dict(r) for r in c.execute('SELECT r.*, c.name category FROM rules r JOIN categories c ON c.id=r.category_id ORDER BY r.id')]))
                 if path=='/api/month' and method=='GET':
                     month=parse_qs(url.query).get('month',[date.today().strftime('%Y-%m')])[0]
                     report=summary(c,month)
@@ -570,9 +617,11 @@ class Handler(BaseHTTPRequestHandler):
                     c.execute('INSERT INTO accounts(name,opening) VALUES (?,?)',(name,money(data.get('opening','0'))))
                 elif path.startswith('/api/accounts/') and method=='PUT':
                     key=int(path.rsplit('/',1)[1])
-                    existing(c,'accounts',key)
-                    opening=money(data.get('opening',''))
-                    c.execute('UPDATE accounts SET opening=? WHERE id=?',(opening,key))
+                    edit_account(c,key,data)
+                elif path.startswith('/api/accounts/') and method=='DELETE':
+                    result=delete_account(c,int(path.rsplit('/',1)[1]),data)
+                    c.commit()
+                    return self.send(200,result)
                 elif path=='/api/categories' and method=='POST':
                     name=clean(data.get('name'),80)
                     if not name: raise Invalid('Enter a category name.')
@@ -607,7 +656,9 @@ class Handler(BaseHTTPRequestHandler):
                 elif path.startswith('/api/rules/') and method=='DELETE':
                     c.execute('DELETE FROM rules WHERE id=?',(int(path.rsplit('/',1)[1]),))
                 elif path=='/api/transactions' and method in ('POST','PUT'):
-                    tx=transaction(c,data)
+                    old=c.execute('SELECT * FROM transactions WHERE id=?',(int(data.get('id') or 0),)).fetchone() if method=='PUT' else None
+                    if method=='PUT' and not old: raise Invalid('Transaction not found.')
+                    tx=transaction(c,data,original_account=old['account_id'] if old else None)
                     if method=='PUT':
                         old=c.execute('SELECT * FROM transactions WHERE id=?',(int(data.get('id') or 0),)).fetchone()
                         if not old: raise Invalid('Transaction not found.')
@@ -619,7 +670,7 @@ class Handler(BaseHTTPRequestHandler):
                     else:
                         if tx['kind']=='transfer':
                             dest=int(data.get('destination_id') or 0)
-                            existing(c,'accounts',dest)
+                            active_account(c,dest)
                             if dest==tx['account_id']: raise Invalid('Choose a different destination account.')
                             group=secrets.token_urlsafe(16)
                             insert(c,tx,transfer_id=group)

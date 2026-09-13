@@ -16,7 +16,7 @@ import auth
 from desktop.export_api import ExportApi, DesktopApi
 from desktop.updater import UpdateManager
 
-VERSION = '0.5.4'
+VERSION = '0.5.5'
 
 def icon_path():
     return app.ROOT/'static'/'spearmint.ico' if getattr(sys,'frozen',False) else Path(__file__).parent/'spearmint.ico'
@@ -210,6 +210,14 @@ def ui_smoke_test():
                     wait_for("!document.querySelector('#check-updates').hidden")
                     window.evaluate_js("document.querySelector('#check-updates').click()")
                     wait_for("document.querySelector('#notice').textContent.includes('up to date')")
+                    window.evaluate_js("api('/api/accounts','POST',{name:'Smoke account',opening:'10'}).then(()=>refresh())")
+                    wait_for("state.accounts.some(a=>a.name==='Smoke account')")
+                    window.evaluate_js("setView('accounts');document.querySelector('[data-edit-opening]').click()")
+                    wait_for("document.querySelector('#account-edit-dialog').open")
+                    if not window.evaluate_js("document.querySelector('#account-edit-name').value==='Smoke account' && document.querySelector('#account-delete-action').options.length===4"):
+                        raise RuntimeError('Account management controls did not render.')
+                    window.evaluate_js("document.querySelector('#account-edit-name').value='Renamed smoke account';document.querySelector('#account-edit-opening').value='25';document.querySelector('#account-edit-form').requestSubmit()")
+                    wait_for("!document.querySelector('#account-edit-dialog').open && state.accounts.some(a=>a.name==='Renamed smoke account' && a.opening===2500)")
                     outcome.append(True)
                 finally:
                     window.destroy()

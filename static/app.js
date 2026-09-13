@@ -13,7 +13,7 @@ function clearPrivateState(){
  importProfileAccount=null;++previewRequest;
  state=null;report=null;allTransactions=[];csvText='';csvHeaders=[];importPreview=null;selectedTransactions.clear();scopeRequest++;headerRequest++;
  for(const id of ['tx-body','review-body','import-result','account-list','category-chips','rules-list','users-list','category-list','insights','trend','overview-balances','profile-identity'])$('#'+id).replaceChildren();
- for(const id of ['tx-form','account-form','category-form','rule-form','password-form','user-form','manage-user-form','category-edit-form','category-delete-form','account-edit-form'])$('#'+id).reset();
+ for(const id of ['tx-form','account-form','category-form','rule-form','password-form','user-form','manage-user-form','category-edit-form','category-delete-form','account-edit-form','account-delete-form'])$('#'+id).reset();
  $('#csv-file').value='';$('#skip-lines').value='0';$('#profile-name').value='';$('#mapping').hidden=true;$('#review').hidden=true;$('#user-admin').hidden=true;
  $('#transaction-scope').value='month';$('#show-completed').checked=false;$('#search').value='';$('#category-filter').value='';
  $('#tx-dialog').close();$('#category-dialog').close();$('#account-edit-dialog').close();if($('#user-action').onchange)$('#user-action').onchange();setView('overview');
@@ -33,7 +33,8 @@ function renderState(){
  $('#tx-category').innerHTML=opts(state.categories,'','Uncategorized / merchant rule');$('#rule-category').innerHTML=opts(state.categories);
  const filter=$('#category-filter'),old=filter.value;filter.innerHTML='<option value="">All categories</option><option value="none">Uncategorized</option>'+state.categories.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');filter.value=old;
  const profile=$('#profile'),p=profile.value;profile.innerHTML='<option value="">New mapping</option>'+state.profiles.map(x=>`<option value="${esc(x.name)}">${esc(x.name)}</option>`).join('');profile.value=p;
- $('#account-list').innerHTML=state.accounts.length?state.accounts.map(a=>`<div class="account-row"><span>${esc(a.name)}<small>Balance including all entered transactions</small></span><div class="account-actions"><strong>${moneyHtml(a.balance)}</strong><button class="secondary" data-edit-opening="${a.id}" aria-label="Edit opening balance for ${esc(a.name)}">Edit opening balance</button></div></div>`).join(''):'<p class="empty">Add your first account to start tracking.</p>';
+ const accountRow=a=>`<div class="account-row"><span>${esc(a.name)}<small>${a.archived?'Archived · transactions retained in history':'Balance including all entered transactions'}</small></span><div class="account-actions">${a.archived?'':`<strong>${moneyHtml(a.balance)}</strong>`}<button class="secondary" data-edit-opening="${a.id}" aria-label="Edit ${esc(a.name)}">Edit / delete account</button></div></div>`;
+ $('#account-list').innerHTML=(state.accounts.length?state.accounts.map(accountRow).join(''):'<p class="empty">Add your first account to start tracking.</p>')+((state.archived_accounts||[]).length?'<h3 class="archived-heading">Archived accounts</h3>'+state.archived_accounts.map(accountRow).join(''):'');
  $('#category-chips').innerHTML=state.categories.map(c=>`<button class="chip secondary" data-edit-category="${c.id}" aria-label="Edit ${esc(c.name)}">${esc(c.name)} · Edit</button>`).join('');
  $('#rules-list').innerHTML=state.rules.map(r=>`<div class="rule-row"><span><strong>${esc(r.contains_text)}</strong> → ${esc(r.category)}</span><button class="secondary" data-delete-rule="${r.id}">Remove</button></div>`).join('');
 }
@@ -57,7 +58,7 @@ function renderTransactions(){selectedTransactions.clear();const cleanup=$('#tra
  updateSelection();
 }
 function txType(){const editing=!!$('#tx-form').elements.id.value,transfer=$('#tx-kind').value==='transfer';$('#destination-label').hidden=!transfer||editing;$('#tx-cat-label').hidden=['income','transfer'].includes($('#tx-kind').value);$('#tx-help').textContent=transfer?(editing?'This edits one imported transfer row. Keep its signed amount; mark the counterpart on the other account as a transfer too.':'A transfer creates linked entries in both accounts and is excluded from spending. Enter a positive amount leaving the source account.'):'Enter a positive amount. Refunds reduce spending in the selected category.';}
-function openTransaction(id){if(!state.accounts.length){setView('accounts');notify('Add an account first.');return;}const form=$('#tx-form');form.reset();form.elements.id.value='';form.elements.date.value=localDay();form.elements.account_id.value=state.accounts[0].id;$('#tx-title').textContent=id?'Edit transaction':'Add transaction';if(id){const tx=transactionRows().find(t=>t.id===id);for(const key of ['id','date','account_id','kind','payee','category_id','note'])form.elements[key].value=tx[key]??'';form.elements.amount.value=((tx.kind==='transfer'?tx.amount:Math.abs(tx.amount))/100).toFixed(2);}txType();$('#tx-dialog').showModal();}
+function openTransaction(id){if(!id&&!state.accounts.length){setView('accounts');notify('Add an account first.');return;}const form=$('#tx-form');form.reset();form.elements.id.value='';form.elements.date.value=localDay();const original=id?transactionRows().find(t=>t.id===id):null;const available=[...state.accounts,...(state.archived_accounts||[]).filter(a=>a.id===original?.account_id)];$('#tx-account').innerHTML=opts(available);form.elements.account_id.value=available[0]?.id||'';$('#tx-title').textContent=id?'Edit transaction':'Add transaction';if(id){const tx=transactionRows().find(t=>t.id===id);for(const key of ['id','date','account_id','kind','payee','category_id','note'])form.elements[key].value=tx[key]??'';form.elements.amount.value=((tx.kind==='transfer'?tx.amount:Math.abs(tx.amount))/100).toFixed(2);}txType();$('#tx-dialog').showModal();}
 function mapping(){const m={skip_lines:Number($('#skip-lines').value),delimiter:$('#delimiter').value,date_format:$('#date-format').value,mode:$('#amount-mode').value,invert:$('#invert').checked,decimal_comma:$('#decimal-comma').checked};for(const k of ['date','payee','amount','debit','credit','category'])m[k]=$('#map-'+k).value;return m;}
 function invalidatePreview(){++previewRequest;importPreview=null;$('#review').hidden=true;}
 async function loadHeaders(){if(!csvText)return;const request=++headerRequest;invalidatePreview();$('#mapping').hidden=true;const {headers}=await api('/api/csv/headers','POST',{text:csvText,delimiter:$('#delimiter').value,skip_lines:Number($('#skip-lines').value)});if(request!==headerRequest)return;csvHeaders=headers;for(const key of ['date','payee','amount','debit','credit','category']){$('#map-'+key).innerHTML='<option value="">Not mapped</option>'+headers.map((h,i)=>`<option value="${i}">${i+1}: ${esc(h)}</option>`).join('');const patterns={date:/^date$|transaction date/i,payee:/payee|description|merchant/i,amount:/^(transaction )?amount$/i,debit:/debit|withdrawal/i,credit:/credit|deposit/i};const idx=headers.findIndex(h=>patterns[key]?.test(h));if(idx>=0)$('#map-'+key).value=idx;}$('#mapping').hidden=false;applyProfile();}
@@ -223,15 +224,46 @@ $('#tx-form').onsubmit=e=>{e.preventDefault();task(async()=>{const data=Object.f
 $('#tx-body').onclick=e=>{const edit=e.target.closest('[data-edit]'),del=e.target.closest('[data-delete]');if(edit)openTransaction(Number(edit.dataset.edit));if(del){const tx=transactionRows().find(t=>t.id===Number(del.dataset.delete));if(confirm(tx.transfer_id?'Delete both sides of this linked transfer?':'Delete this transaction?'))task(async()=>{await api('/api/transactions/'+tx.id,'DELETE',{});await refresh();});}};
 for(const [form,path] of [['account-form','accounts'],['category-form','categories'],['rule-form','rules']])$('#'+form).onsubmit=e=>{e.preventDefault();task(async()=>{await api('/api/'+path,'POST',Object.fromEntries(new FormData(e.target)));e.target.reset();await refresh();notify('Saved.');},e.submitter);};
 function previewOpeningBalance(){
- const form=$('#account-edit-form'),account=state.accounts.find(a=>a.id===Number(form.elements.id.value));
+ const form=$('#account-edit-form'),account=[...state.accounts,...(state.archived_accounts||[])].find(a=>a.id===Number(form.elements.id.value));
  if(!account)return;
  const opening=$('#account-edit-opening').valueAsNumber,activity=account.balance-account.opening;
  $('#account-balance-preview').innerHTML=Number.isFinite(opening)?`Recorded activity: ${moneyHtml(activity)} · Resulting balance: ${moneyHtml(Math.round(opening*100)+activity)}`:'Enter a valid opening balance.';
 }
-$('#account-list').onclick=e=>{const button=e.target.closest('[data-edit-opening]');if(!button)return;const a=state.accounts.find(a=>a.id===Number(button.dataset.editOpening));$('#account-edit-form').elements.id.value=a.id;$('#account-edit-title').textContent=`${a.name} — opening balance`;$('#account-edit-opening').value=(a.opening/100).toFixed(2);previewOpeningBalance();$('#account-edit-dialog').showModal();};
+function updateAccountDeleteChoice(){
+ const action=$('#account-delete-action').value;
+ $('#account-destination-label').hidden=action!=='move';
+ $('#account-delete-destination').required=action==='move';
+ const explanations={keep:'The account will be removed from active accounts and balances. Its transactions remain unchanged, with the original account name, in spending history. You can manage this archived reference later.',move:'All transactions will move to the chosen account. Its opening balance stays unchanged; this account’s opening balance is not transferred. Transfer entries merged into the same account are kept but unlinked. This cannot be undone.',remove:'All transactions in this account will be permanently removed. Transactions in other accounts stay unchanged except that affected transfer links are removed. This cannot be undone.'};
+ $('#account-delete-explanation').textContent=explanations[action]||'Choose how to handle this account’s transactions.';
+ $('#delete-account').disabled=!action||(action==='move'&&!$('#account-delete-destination').value);
+}
+$('#account-list').onclick=e=>{
+ const button=e.target.closest('[data-edit-opening]');if(!button)return;
+ const a=[...state.accounts,...(state.archived_accounts||[])].find(a=>a.id===Number(button.dataset.editOpening));
+ $('#account-edit-form').elements.id.value=a.id;$('#account-edit-name').value=a.name;
+ $('#account-edit-title').textContent=`Edit ${a.name}${a.archived?' (archived)':''}`;
+ $('#account-edit-opening').value=(a.opening/100).toFixed(2);
+ $('#account-delete-form').reset();
+ $('#account-delete-count').textContent=`${a.transaction_count||0} recorded transactions across all dates.`;
+ $('#account-delete-destination').innerHTML=opts(state.accounts.filter(x=>x.id!==a.id));
+ updateAccountDeleteChoice();previewOpeningBalance();$('#account-edit-dialog').showModal();
+};
+$('#account-delete-action').onchange=updateAccountDeleteChoice;
+$('#account-delete-destination').onchange=updateAccountDeleteChoice;
 $('#account-edit-opening').oninput=previewOpeningBalance;
 $('#close-account-edit').onclick=()=>$('#account-edit-dialog').close();
-$('#account-edit-form').onsubmit=e=>{e.preventDefault();task(async()=>{const data=Object.fromEntries(new FormData(e.target));await api('/api/accounts/'+data.id,'PUT',{opening:data.opening});$('#account-edit-dialog').close();await refresh();notify('Opening balance updated.');},e.submitter);};
+$('#account-edit-form').onsubmit=e=>{e.preventDefault();task(async()=>{const data=Object.fromEntries(new FormData(e.target));await api('/api/accounts/'+data.id,'PUT',{name:data.name,opening:data.opening});$('#account-edit-dialog').close();await refresh();notify('Account updated.');},e.submitter);};
+$('#account-delete-form').onsubmit=e=>{
+ e.preventDefault();const id=Number($('#account-edit-form').elements.id.value);
+ const account=[...state.accounts,...(state.archived_accounts||[])].find(a=>a.id===id);
+ const data=Object.fromEntries(new FormData(e.target));
+ if(!['keep','move','remove'].includes(data.transactions))return;
+ if(data.transactions==='move'&&!data.destination_id)return;
+ const destination=state.accounts.find(a=>a.id===Number(data.destination_id));
+ const detail=data.transactions==='keep'?'Retain all transactions unchanged in history and archive this account.':data.transactions==='move'?`Move all transactions to ${destination?.name}. The destination opening balance will not change.`:'Permanently remove all transactions in this account. Entries in other accounts remain, with affected transfer links removed.';
+ if(!confirm(`Delete ${account.name}?\n\n${detail}\n\n${data.transactions==='keep'?'The account will no longer appear in active account balances.':'This cannot be undone.'}`))return;
+ task(async()=>{await api('/api/accounts/'+id,'DELETE',{...data,confirmed:true});$('#account-edit-dialog').close();invalidatePreview();await refresh();notify(data.transactions==='keep'?'Account archived; transactions retained.':'Account deleted.');},e.submitter);
+};
 $('#category-chips').onclick=e=>{const b=e.target.closest('[data-edit-category]');if(!b)return;const cat=state.categories.find(c=>c.id===Number(b.dataset.editCategory));$('#category-edit-form').elements.id.value=cat.id;$('#category-edit-name').value=cat.name;$('#category-edit-title').textContent=`Edit ${cat.name}`;$('#replacement-category').innerHTML=opts(state.categories.filter(c=>c.id!==cat.id),'','Uncategorized');$('#category-dialog').showModal();};
 $('#close-category').onclick=()=>$('#category-dialog').close();
 $('#category-edit-form').onsubmit=e=>{e.preventDefault();task(async()=>{const data=Object.fromEntries(new FormData(e.target));await api('/api/categories/'+data.id,'PUT',{name:data.name});$('#category-dialog').close();invalidatePreview();await refresh();notify('Category renamed.');},e.submitter);};
