@@ -10,6 +10,7 @@ function syncMonthControl(){$('#month').disabled=view==='transactions'&&$('#tran
 const localDay=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
 $('#month').value=localDay().slice(0,7);
 function clearPrivateState(){
+ $('#server-backup-form').reset();$('#server-restore-password').value='';
  serverText='';serverPreview=null;++serverRequest;$('#server-file').value='';$('#server-confirm').value='';$('#server-review').hidden=true;$('#server-summary').textContent='';$('#server-validate').disabled=true;$('#admin-nav').hidden=true;
 
  restoreText='';restorePreview=null;++restoreRequest;$('#restore-file').value='';$('#restore-review').hidden=true;$('#restore-summary').textContent='';$('#preview-restore').disabled=true;$('#backup-dialog').close();
@@ -348,19 +349,26 @@ $('#desktop-update-progress').addEventListener('cancel',e=>e.preventDefault());
 $('#check-updates').onclick=()=>task(async()=>{await window.pywebview.api.check_updates();});
 
 $('#currency-form').onsubmit=e=>{e.preventDefault();const currency=$('#profile-currency').value;if(currency===state.currency)return;if(!confirm(`Change your profile currency to ${currency}? Existing amounts will stay the same; no currency conversion will occur.`))return;task(async()=>{await api('/api/profile','POST',{currency,confirmed:true});restorePreview=null;$('#restore-review').hidden=true;await refresh();notify('Profile currency updated.');},e.submitter);};
-$('#server-download').onclick=e=>task(async()=>{
- const response=await fetch('/api/server-backup');if(!response.ok){const r=await response.json();throw Error(r.error);}
- if(window.pywebview?.api?.save_server_backup){const result=await window.pywebview.api.save_server_backup(await response.text());if(result.saved)notify('Saved '+result.filename);return;}
- const url=URL.createObjectURL(await response.blob()),a=document.createElement('a');a.href=url;a.download='spearmint-server-backup.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
-},e.currentTarget);
+function archiveBase64(buffer){let s='';const bytes=new Uint8Array(buffer);for(let i=0;i<bytes.length;i+=32768)s+=String.fromCharCode(...bytes.subarray(i,i+32768));return btoa(s);}
+$('#server-backup-form').onsubmit=e=>{e.preventDefault();task(async()=>{
+ const password=$('#server-backup-password').value;
+ if(password!==$('#server-backup-confirm').value)throw Error('Backup passwords do not match.');
+ const response=await fetch('/api/server-backup',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'MonthlySpend'},body:JSON.stringify({password,confirmation:$('#server-backup-confirm').value})});
+ if(!response.ok){const r=await response.json();throw Error(r.error);}
+ $('#server-backup-form').reset();
+ if(window.pywebview?.api?.save_server_backup){const result=await window.pywebview.api.save_server_backup(archiveBase64(await response.arrayBuffer()));if(result.saved)notify('Saved '+result.filename);return;}
+ const url=URL.createObjectURL(await response.blob()),a=document.createElement('a');a.href=url;a.download='spearmint-server-backup.zip';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+},e.submitter);};
 $('#server-file').onchange=()=>task(async()=>{
+ $('#server-restore-password').value='';
  const request=++serverRequest;serverPreview=null;serverText='';$('#server-review').hidden=true;$('#server-confirm').value='';$('#server-validate').disabled=true;
- const file=$('#server-file').files[0];if(!file)return;if(file.size>50*1024*1024)throw Error('Choose a backup no larger than 50 MB.');
- const text=decodeCsvBytes(await file.arrayBuffer());if(request!==serverRequest)return;serverText=text;$('#server-validate').disabled=false;
+ const file=$('#server-file').files[0];if(!file)return;if(file.size>100*1024*1024)throw Error('Choose a backup no larger than 100 MB.');
+ const text=archiveBase64(await file.arrayBuffer());if(request!==serverRequest)return;serverText=text;$('#server-validate').disabled=false;
 });
 $('#server-validate').onclick=e=>task(async()=>{
  const request=++serverRequest;serverPreview=null;$('#server-review').hidden=true;$('#server-confirm').value='';
- const result=await api('/api/server-backup/preview','POST',{text:serverText});if(request!==serverRequest)return;
+ const result=await api('/api/server-backup/preview','POST',{archive:serverText,password:$('#server-restore-password').value});if(request!==serverRequest)return;
+ $('#server-restore-password').value='';
  serverPreview=result;$('#server-summary').textContent=`Validated server backup: ${result.users} users, ${result.ledgers} financial databases, ${result.transactions} transactions. All current users and saved data will be replaced. This cannot be undone.`;$('#server-review').hidden=false;
 },e.currentTarget);
 $('#server-restore').onclick=e=>task(async()=>{

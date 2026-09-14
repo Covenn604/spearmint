@@ -6,7 +6,7 @@ Spearmint is a self-hosted spending tracker inspired by Mint. Record your transa
 
 Use it from a computer or phone on your home network. Import bank statements or enter transactions manually; your financial records stay on your server.
 
-**Current version: 0.5.7** · [Docker image](https://github.com/Covenn604/spearmint/pkgs/container/spearmint) · [Report an issue](https://github.com/Covenn604/spearmint/issues)
+**Current version: 0.5.8** · [Docker image](https://github.com/Covenn604/spearmint/pkgs/container/spearmint) · [Report an issue](https://github.com/Covenn604/spearmint/issues)
 
 Spearmint is an independent project and is not affiliated with Mint or Intuit. It is an early-stage application intended for personal use on a trusted network.
 
@@ -78,7 +78,7 @@ These variables are read by the supplied Compose file. Set them in `.env` or in 
 | --- | --- | --- |
 | `APP_PASSWORD` | Required | Initial administrator password; at least 12 characters. Changing it later does not reset an existing password. |
 | `ADMIN_USERNAME` | `admin` | Administrator username on first setup. |
-| `APP_IMAGE` | `ghcr.io/covenn604/spearmint:latest` | Image to run. Use `:0.5.7` for the current release tag or a published `:sha-…` tag for a specific source revision. |
+| `APP_IMAGE` | `ghcr.io/covenn604/spearmint:latest` | Image to run. Use `:0.5.8` for the current release tag or a published `:sha-…` tag for a specific source revision. |
 | `APP_PORT` | `8085` | Port exposed on the host; the container listens on `8080`. |
 | `DATA_LOCATION` | `spearmint-data` | Default named volume, or an absolute host directory mounted at `/data`. |
 | `PUID` | `10001` | Numeric user ID for the container process. |
@@ -442,10 +442,10 @@ Existing profiles retain their currency when upgrading. Profile backups from v0.
 
 ### Administration: complete server backup and restore
 
-Only the administrator can access server backups. **Administration → Download server CSV backup** saves all users, including disabled users, their password and security-answer hashes, every user's financial data and currency, saved mappings and rules, and the default currency for new profiles. Windows opens a Save As dialog. Like profile backups, server backups use a versioned CSV format with JSON records and support files up to 50 MB. Keep them private: they contain sensitive financial and authentication records and are not encrypted.
+Only the administrator can access server backups. Under **Administration**, choose and confirm a backup password (12–1,024 characters), then select **Download server ZIP backup**. Spearmint creates consistent SQLite snapshots and packages them with saved server settings in an AES-256 encrypted ZIP. This preserves all users, including disabled users, password and security-answer hashes, every user's financial data and currency, saved mappings and rules, and the default currency for new profiles. Windows opens a Save As dialog. Browser editions download the ZIP. Keep the backup password safe: it is not saved by Spearmint and cannot be recovered.
 
-To restore, select the server CSV, choose **Validate server backup**, and review the user, database, and transaction counts. Type **RESTORE SERVER**, then confirm the final warning. This replaces all current users and financial data, including removing users created after the backup. Everyone is signed out; sign in with the administrator credentials saved in the backup. Existing recovery challenges and temporary import previews are cleared. Preview approval expires after one hour.
+To restore, select the encrypted server ZIP, enter its backup password, choose **Validate server backup**, and review the user, database, and transaction counts. Type **RESTORE SERVER**, then confirm the final warning. This replaces all current users and financial data, including removing users created after the backup. Everyone is signed out; sign in with the administrator credentials saved in the backup. Existing recovery challenges and temporary import previews are cleared. Preview approval expires after one hour.
 
-Restore validates records in staged databases before replacing live data. Application requests pause during backup and restore. A recovery journal rolls back an interrupted replacement before requests resume or on the next startup. Back up the current server first if you need to retain its state.
+Restore checks encryption, integrity, file paths, compatible database schemas, and record links in staged databases before replacing live data. Application requests pause during backup and restore. A recovery journal rolls back an interrupted replacement before requests resume or on the next startup. Back up the current server first if you need to retain its state. ZIP backups support up to 100 MB compressed and 500 MB expanded. Use the same Spearmint version on both installations when moving server backups. Old server CSV backups are not accepted by this ZIP flow; create a ZIP backup after upgrading. Personal profile CSV backups remain supported. Docker volumes, ports, HTTPS configuration, and Windows update preferences are deployment settings and are not replaced.
 
 Server exports preserve application data, not deployment configuration: Docker Compose, environment secrets, volume paths, network ports, HTTPS certificates, Windows update preferences, and application binaries are not included or replaced. Maintain those separately. An offline copy of the full data directory remains available for larger installations. Run only one Spearmint server process against a data directory.

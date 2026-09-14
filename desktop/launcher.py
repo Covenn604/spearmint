@@ -16,7 +16,7 @@ import auth
 from desktop.export_api import ExportApi, DesktopApi
 from desktop.updater import UpdateManager
 
-VERSION = '0.5.7'
+VERSION = '0.5.8'
 
 def icon_path():
     return app.ROOT/'static'/'spearmint.ico' if getattr(sys,'frozen',False) else Path(__file__).parent/'spearmint.ico'
@@ -228,7 +228,7 @@ def ui_smoke_test():
                     wait_for("restorePreview && !document.querySelector('#restore-review').hidden")
                     window.evaluate_js("window.confirm=()=>true;document.querySelector('#commit-restore').click()")
                     wait_for("!document.querySelector('#backup-dialog').open && state && state.accounts.some(a=>a.name==='Renamed smoke account' && a.opening===2500)")
-                    window.evaluate_js("setView('administration');fetch('/api/server-backup').then(r=>r.text()).then(text=>{serverText=text;document.querySelector('#server-validate').disabled=false;document.querySelector('#server-validate').click()})")
+                    window.evaluate_js("setView('administration');fetch('/api/server-backup',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'MonthlySpend'},body:JSON.stringify({password:'smoke-backup-password',confirmation:'smoke-backup-password'})}).then(r=>r.arrayBuffer()).then(bytes=>{serverText=archiveBase64(bytes);document.querySelector('#server-restore-password').value='smoke-backup-password';document.querySelector('#server-validate').disabled=false;document.querySelector('#server-validate').click()})")
                     wait_for("serverPreview && !document.querySelector('#server-review').hidden && typeof window.pywebview.api.save_server_backup==='function'")
                     window.evaluate_js("document.querySelector('#server-confirm').value='RESTORE SERVER';document.querySelector('#server-restore').click()")
                     wait_for("document.querySelector('#shell').hidden && !document.querySelector('#login').hidden")

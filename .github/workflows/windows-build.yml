@@ -29,7 +29,7 @@ jobs:
           node --check static/app.js
           node --test tests/test_csv_reader.js tests/test_csv_profiles.js tests/test_bulk_delete.js
       - name: Bundle standalone application
-        run: python -m PyInstaller --noconfirm --clean --windowed --name Spearmint --paths . --icon desktop/spearmint.ico --add-data "desktop/spearmint.ico;static" --add-data "static;static" --collect-all webview desktop/launcher.py
+        run: python -m PyInstaller --noconfirm --clean --windowed --name Spearmint --paths . --icon desktop/spearmint.ico --add-data "desktop/spearmint.ico;static" --add-data "static;static" --collect-all webview --collect-all Cryptodome desktop/launcher.py
       - name: Smoke-test packaged backend and assets
         shell: pwsh
         run: |

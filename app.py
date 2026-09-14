@@ -536,7 +536,7 @@ class Handler(BaseHTTPRequestHandler):
                 if self.headers.get('X-Requested-With')!='MonthlySpend':
                     return self.send(403,{'error':'Request rejected.'})
                 length=int(self.headers.get('Content-Length','0'))
-                limit=110*1024*1024 if path in ('/api/backup/preview','/api/server-backup/preview') else 4_000_000
+                limit=145*1024*1024 if path in ('/api/backup/preview','/api/server-backup/preview') else 4_000_000
                 if length<0 or length>limit: return self.send(413,{'error':'Request exceeds the allowed size.'})
                 data=json.loads(self.rfile.read(length) or b'{}')
                 if not isinstance(data,dict): raise Invalid('Expected an object.')
@@ -605,10 +605,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200,{'ok':True},cookie='session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0')
             if path.startswith('/api/server-backup'):
                 if not self.user['is_admin']: return self.send(403,{'error':'Administrator access required.'})
-                if path=='/api/server-backup' and method=='GET':
-                    return self.send(200,server_backup.export(DATA,CURRENCY),'text/csv; charset=utf-8')
+                if path=='/api/server-backup' and method=='POST':
+                    if data.get('password')!=data.get('confirmation'): raise Invalid('Backup passwords do not match.')
+                    return self.send(200,server_backup.export(DATA,CURRENCY,data.get('password')),'application/zip')
                 if path=='/api/server-backup/preview' and method=='POST':
-                    return self.send(200,server_backup.preview(DATA,data.get('text'),self.user['id']))
+                    return self.send(200,server_backup.preview(DATA,data.get('archive'),data.get('password'),self.user['id']))
                 if path=='/api/server-backup/restore' and method=='POST':
                     server_backup.restore(DATA,data,self.user['id'])
                     with LOCK: SESSIONS.clear();ATTEMPTS.clear()

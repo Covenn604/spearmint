@@ -23,3 +23,4 @@ button.danger{background:#b72f45}#category-dialog hr{border:0;border-top:1px sol
 #account-edit-dialog hr{border:0;border-top:1px solid var(--line);margin:25px 0}.archived-heading{margin:24px 0 0;font-size:16px}
 
 #backup-dialog hr{border:0;border-top:1px solid var(--line);margin:24px 0}#backup-dialog>button,#preview-restore{margin-top:14px}#restore-review{margin-top:20px}
+#settings .panel>h3,#administration .panel>h3{border-top:1px solid var(--line);margin-top:30px;padding-top:26px;margin-bottom:16px}#settings form,#administration form,#administration .panel>label,#server-review{width:100%;max-width:560px}#administration .form-grid{grid-template-columns:1fr}#settings form p,#administration form p{margin-bottom:0}#administration .restore-password{margin-top:18px}#server-validate,#server-restore{margin-top:18px}#server-review{margin-top:24px}

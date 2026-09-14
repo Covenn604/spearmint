@@ -1,5 +1,6 @@
 """Native save operation for CSV bytes fetched by the signed-in web UI."""
 from pathlib import Path
+import base64
 import os
 import tempfile
 import threading
@@ -16,8 +17,9 @@ class ExportApi:
     def save_backup(self, csv_text):
         return self._save_csv(csv_text,'spearmint-backup.csv')
 
-    def save_server_backup(self,csv_text):
-        return self._save_csv(csv_text,'spearmint-server-backup.csv')
+    def save_server_backup(self,encoded):
+        if not isinstance(encoded,str): raise ValueError('The server backup is not valid.')
+        return self._save_bytes(base64.b64decode(encoded,validate=True),'spearmint-server-backup.zip')
 
     def _save_csv(self, csv_text, filename):
         import webview
@@ -44,6 +46,22 @@ class ExportApi:
         finally:
             if temporary and temporary.exists():
                 temporary.unlink()
+            self._lock.release()
+
+    def _save_bytes(self,content,filename):
+        import webview
+        if not self._lock.acquire(blocking=False): raise ValueError('An export dialog is already open.')
+        temporary=None
+        try:
+            selected=self._window.create_file_dialog(webview.FileDialog.SAVE,save_filename=filename,file_types=('ZIP archives (*.zip)',))
+            if not selected:return {'saved':False}
+            destination=Path(selected if isinstance(selected,str) else selected[0])
+            with tempfile.NamedTemporaryFile(mode='wb',dir=destination.parent,delete=False) as stream:
+                temporary=Path(stream.name);stream.write(content)
+            os.replace(temporary,destination)
+            return {'saved':True,'filename':destination.name}
+        finally:
+            if temporary and temporary.exists():temporary.unlink()
             self._lock.release()
 
 
