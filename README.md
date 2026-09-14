@@ -2,9 +2,9 @@
 
 **Know where your money goes.**
 
-Spearmint is a self-hosted spending tracker inspired by Mint. Record your transactions, see how much you spend each month, and find the categories where spending has increased—without maintaining an envelope budget.
+Spearmint is a spending tracker inspired by Mint, available as a self-hosted Docker server and a standalone Windows application. Record your transactions, see how much you spend each month, and find the categories where spending has increased—without maintaining an envelope budget.
 
-Use it from a computer or phone on your home network. Import bank statements or enter transactions manually; your financial records stay on your server.
+Use the Docker edition from a computer or phone on your home network, or run the Windows edition on one PC. Import bank statements or enter transactions manually; financial records are stored on your own server or PC. The editions do not synchronize.
 
 **Current version: 0.5.8** · [Docker image](https://github.com/Covenn604/spearmint/pkgs/container/spearmint) · [Report an issue](https://github.com/Covenn604/spearmint/issues)
 
@@ -17,7 +17,10 @@ Spearmint is an independent project and is not affiliated with Mint or Intuit. I
 - **Import CSV statements:** map the columns you need, preview transactions, review possible duplicates, and save reusable formats.
 - **Automate repeat imports:** give each account its own default format, including date, header, separator, and amount settings.
 - **Categorize faster:** reuse categories from previous purchases at the same merchant, or define merchant rules.
-- **Clean up across months:** search all transactions and categorize matching purchases in bulk.
+- **Clean up across months:** search all transactions, categorize matching purchases in bulk, or select and delete transactions with confirmation.
+- **Manage accounts:** edit names and opening balances; archive accounts with their history, move their transactions, or remove them.
+- **Back up and restore:** save a personal financial CSV backup or an administrator-only encrypted ZIP containing all users, databases, and saved server settings.
+- **Choose your display currency:** select from 25 currencies per profile, without converting stored amounts.
 - **Handle card payments correctly:** classify movements between accounts as transfers so they do not inflate income or expenses.
 - **Keep separate finances:** create user logins with private accounts, transactions, categories, rules, and import formats.
 
@@ -25,7 +28,7 @@ Spearmint is an independent project and is not affiliated with Mint or Intuit. I
 
 Spearmint also has a standalone Windows 11 x64 installer. It bundles Python, the backend, and the interface; Docker and a separate server are not required. Both editions share the same application features, but their databases are independent and do not synchronize.
 
-1. Open the [Spearmint Releases](https://github.com/Covenn604/spearmint/releases) and download the `Spearmint-<version>-Windows-x64-Setup.exe` installer from **Assets**.
+1. Open [Spearmint Releases](https://github.com/Covenn604/spearmint/releases) and download the `Spearmint-<version>-Windows-x64-Setup.exe` installer from **Assets**. The current [v0.5.8 release](https://github.com/Covenn604/spearmint/releases/tag/Spearmint-v0.5.8) includes `Spearmint-0.5.8-Windows-x64-Setup.exe`. If you download an installer ZIP, extract it and run the EXE inside.
 2. Run the `Spearmint-<version>-Windows-x64-Setup.exe` installer. It installs for the current Windows user and offers a desktop shortcut.
 3. Open Spearmint and create your administrator username and password in the first-run setup window.
 4. Sign in, complete your password and security questions, then add accounts or import CSVs as usual.
@@ -34,11 +37,17 @@ If Microsoft WebView2 Runtime is missing, the installer runs Microsoft's signed 
 
 Financial data is stored in `%LOCALAPPDATA%\Spearmint\data`. The backend listens only on `127.0.0.1` using an available port and stops when the desktop window closes. Only one desktop instance may use that data folder at a time. Other devices cannot connect to the standalone edition; use Docker for server access.
 
-To back up Windows data, close Spearmint and copy the entire data folder to a separate backup location. To restore, close the app and restore a complete backup to that folder. Install a newer installer over the existing installation to update. Uninstall removes program files and shortcuts but preserves financial data. **Profile → Profile Backup & Restore → Download CSV backup** opens a Windows Save As dialog so you can choose the backup filename and destination. The Windows app checks GitHub Releases on startup and hourly while open. New stable releases prompt you to update; declining silences automatic prompts for 24 hours, including across restarts. **Check for updates** performs an immediate check even during that pause. Accepting downloads and verifies the installer against GitHub’s SHA-256 digest, closes the app, installs into the existing program directory, and reopens Spearmint. Saved data is preserved; save any form edits before accepting. Offline or failed background checks do not interrupt normal use. Download or verification failures leave the running version in place. There is no synchronization between installations.
+Use **Profile → Profile Backup & Restore** for your own financial CSV backup, or **Administration → Download server ZIP backup** for an encrypted backup of the entire installation. Both open a Windows Save As dialog. See [backup and restore options](#back-up-and-update) for their contents and restore instructions. You can also close Spearmint and copy the entire data folder; close it again before restoring an offline folder copy.
 
-Versions before v0.5.4 require one manual update to enable future automatic updates. The updater only uses published, non-prerelease GitHub Releases with a newer version and a matching `Spearmint-<version>-Windows-x64-Setup.exe` asset containing a GitHub SHA-256 digest. Supported tags include `0.5.7`, `v0.5.7`, and `Spearmint-v0.5.7`. Actions artifacts and Docker images do not trigger Windows prompts. Continue uploading the installer to Releases when publishing a Windows version. Update preferences, staged installers, and `install.log` are stored in `%LOCALAPPDATA%\Spearmint\updates`, separately from financial data. Docker has no automatic update checks.
+Install a newer installer over the existing installation to update. Uninstall removes program files and shortcuts but preserves financial data.
 
-The Windows workflow tests the packaged backend, installed WebView2 login window, installation, and data preservation on uninstall. It cannot replace hands-on testing of first-run setup, CSV file selection, and everyday use on Windows 11. Windows installers are distributed through [GitHub Releases](https://github.com/Covenn604/spearmint/releases).
+### Windows updates
+
+The Windows app checks the repository’s latest published GitHub Release on startup and hourly while open. New stable releases prompt you to update; declining silences automatic prompts for 24 hours, including across restarts. **Check for updates** performs an immediate check even during that pause. Accepting downloads and verifies the installer against GitHub’s SHA-256 digest, closes the app, installs into the existing program directory, and reopens Spearmint. Saved data is preserved; save any form edits before accepting. Offline or failed background checks do not interrupt normal use. Download or verification failures leave the running version in place. There is no synchronization between installations.
+
+Versions before v0.5.4 require one manual update to enable future automatic updates. The updater only uses published, non-prerelease GitHub Releases with a newer version and a matching `Spearmint-<version>-Windows-x64-Setup.exe` asset containing a GitHub SHA-256 digest. Supported tags include `0.5.8`, `v0.5.8`, and `Spearmint-v0.5.8`. Actions artifacts and Docker images do not trigger Windows prompts. Continue uploading the installer to Releases when publishing a Windows version. Update preferences, staged installers, and `install.log` are stored in `%LOCALAPPDATA%\Spearmint\updates`, separately from financial data. Docker has no automatic update checks.
+
+The Windows workflow tests the packaged backend, installation, the installed WebView2 interface, first-login enrollment, security-question recovery, account editing, personal CSV restoration, encrypted server ZIP restoration, and signing in after restore. It also tests an unattended upgrade, automatic relaunch, and data preservation during upgrade and uninstall. Native Save As behavior has focused tests for saved bytes, cancellation, and write failures; fully automated interaction with the operating system’s file picker and hands-on Windows 11 testing remain separate. Windows installers are distributed through [GitHub Releases](https://github.com/Covenn604/spearmint/releases).
 
 ## Install with Docker Compose
 
@@ -50,14 +59,14 @@ cd spearmint
 cp .env.example .env
 ```
 
-Edit `.env` and set `APP_PASSWORD` to a unique password of at least 12 characters. Then start Spearmint:
+Edit `.env` and set `APP_PASSWORD` to a unique password of 12–1,024 characters. Then start Spearmint:
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-Open **http://YOUR-SERVER-IP:8085**. On a new installation, sign in as **admin** using the password you configured. Set `ADMIN_USERNAME` before the first startup if you want a different administrator username.
+Open **http://YOUR-SERVER-IP:8085**. On a new installation, sign in as **admin** using the password you configured. Set `ADMIN_USERNAME` before the first startup if you want a different administrator username. Complete password and security-question setup at the first login before accessing financial records.
 
 The supplied [compose.yaml](compose.yaml) uses a persistent named volume, runs as a non-root user, and keeps the container filesystem read-only except for its data and temporary storage.
 
@@ -76,7 +85,7 @@ These variables are read by the supplied Compose file. Set them in `.env` or in 
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `APP_PASSWORD` | Required | Initial administrator password; at least 12 characters. Changing it later does not reset an existing password. |
+| `APP_PASSWORD` | Required | Initial administrator password; 12–1,024 characters. Keep it configured for server startup; changing it later does not reset an existing password. |
 | `ADMIN_USERNAME` | `admin` | Administrator username on first setup. |
 | `APP_IMAGE` | `ghcr.io/covenn604/spearmint:latest` | Image to run. Use `:0.5.8` for the current release tag or a published `:sha-…` tag for a specific source revision. |
 | `APP_PORT` | `8085` | Port exposed on the host; the container listens on `8080`. |
@@ -84,7 +93,7 @@ These variables are read by the supplied Compose file. Set them in `.env` or in 
 | `PUID` | `10001` | Numeric user ID for the container process. |
 | `PGID` | `10001` | Numeric group ID for the container process. |
 | `CURRENCY` | `CAD` | Initial currency for new profiles (CAD by default). Each user can change their profile currency. A restored server default takes precedence. No currency conversion is performed. |
-| `TZ` | `America/Vancouver` | Server timezone used for the current reporting day. |
+| `TZ` | `America/Vancouver` | Server timezone used for the current reporting day. The browser initially selects the month using the client device’s local date. |
 | `COOKIE_SECURE` | `false` | Set to `true` when accessing Spearmint through HTTPS. |
 
 ### Host folders and permissions
@@ -177,7 +186,7 @@ For **imported transfers**, mark the existing entry on each account as Transfer.
 
 ## Import CSV statements
 
-Open **Import transactions**, select the destination account, and upload the CSV file. Extract ZIP archives before uploading.
+Open **Import CSV**, select the destination account, and upload the CSV file. Extract bank-statement ZIP archives before uploading. Spearmint’s encrypted server backup ZIPs go in **Administration**, not this importer.
 
 ### Supported formats
 
@@ -190,14 +199,14 @@ Open **Import transactions**, select the destination account, and upload the CSV
 | Amounts | One signed amount column, or separate debit and credit columns. Parenthesized negatives and optional decimal-comma formatting are supported. |
 | Size | Up to 2,000,000 bytes and 5,000 data rows, with at most 100 header columns. |
 
-The selected **date, description, and amount fields** are imported, plus an optional **category column**. Leave the category column unmapped for normal bank imports. For migration files, existing category names match without regard to capitalization or extra spaces. New names appear as **New: …** in the preview and are created only for selected expenses or refunds when you confirm the import. You can choose another category or Uncategorized per row. Blank category cells use the usual automatic suggestions; an explicit Uncategorized value leaves the row uncategorized. Income and transfers do not receive spending categories. The category mapping is saved with your import profile. Account identifiers, cheque numbers, running balances, source IDs, and other unmapped fields are ignored. Saved mappings use column positions, so review them if a bank changes its export layout.
+The selected **date, description, and amount fields** are imported, plus an optional **category column**. Leave the category column unmapped for normal bank imports. For migration files, existing category names match without regard to capitalization or extra spaces. New names appear as **New: …** in the preview and are created only for selected expenses or refunds when you confirm the import. You can choose another category or Uncategorized per row. Blank category cells use the usual automatic suggestions; an explicit Uncategorized value leaves the row uncategorized. Income and transfers do not receive spending categories. The category mapping is saved with your import profile. Account identifiers, cheque numbers, running balances, source IDs, notes, and other unmapped fields are ignored. Add notes afterward using **Edit** on a transaction. Historical import IDs remain in the database and backups but are not populated by current CSV imports. Saved mappings use column positions, so review them if a bank changes its export layout.
 
 ### Import workflow
 
 1. **Choose the account.** Its default saved format loads automatically, if one is associated.
 2. **Upload the CSV.** Set the separator and number of lines to skip if needed. A value of zero uses the first nonblank row as the header.
-3. **Map the columns.** Choose date, description, and either a signed amount or separate debit/credit columns.
-4. **Check dates and signs.** Select the exact date format. Use **Reverse amount signs** for a signed column when the statement's direction is opposite to Spearmint's. Negative means money out; positive means money in. Split-column mode uses the absolute credit amount minus the absolute debit amount and ignores the reversal checkbox.
+3. **Map the columns.** Choose date, description, and either a signed amount or separate debit/credit columns. Optionally map categories when migrating from another application.
+4. **Check dates and signs.** Select the exact date format. Use **Reverse amount signs** for a signed column when the statement's direction is opposite to Spearmint's. Negative means money out; positive means money in. Split-column mode uses the absolute credit amount minus the absolute debit amount and ignores the reversal checkbox. A row with nonzero values in both debit and credit is rejected.
 5. **Preview transactions.** Check amounts, categories, types, and duplicate warnings. Positive rows initially count as income: change refunds and transfers to their correct types.
 6. **Import selected transactions.** Only checked, valid rows are committed after confirmation.
 
@@ -252,7 +261,7 @@ Suggestions appear in the CSV preview and can be changed or cleared. Classifying
 
 In **Accounts & categories**, use a category's **Edit** control to rename or delete it. Renaming updates its display throughout the app.
 
-When deleting a category, choose another category or **Uncategorized** for its transactions. If merchant rules still use it, reassign them to a valid category or remove those rules first. Transactions are preserved.
+When deleting a category, choose another category or **Uncategorized** for its transactions. Selecting a replacement category also moves merchant rules that use the deleted category. To choose **Uncategorized** when rules still refer to it, remove those rules first. Transactions are preserved.
 
 ## Understand the monthly overview
 
@@ -270,15 +279,21 @@ The baseline excludes months before the earliest recorded non-transfer transacti
 
 The six-month trend uses full earlier months and month-to-date for the current month. **Above usual** means spending increased relative to your history; it does not mean that category exceeded a configured budget.
 
+## Profile currencies
+
+Choose a currency under **Profile**. Each profile uses one currency across its accounts. Changing it preserves the numeric values of transactions and opening balances; it does not perform an exchange-rate conversion. Supported currencies are CAD, USD, EUR, GBP, AUD, NZD, CHF, CNY, HKD, SGD, INR, MXN, BRL, ZAR, SEK, NOK, DKK, PLN, CZK, AED, SAR, TRY, PHP, THB, and MYR. These currencies use two decimal places, matching Spearmint's exact integer-hundredths storage. Currencies with zero or three decimal places and mixed-currency accounts are not yet supported by the selector.
+
+Existing profiles retain their currency when upgrading. Profile backups from v0.5.6 remain restorable. Set your profile to the backup's currency before restoring; mismatched currencies are rejected.
+
 ## Users and access
 
 Open **Profile** to change your password, choose your currency, or back up and restore your financial records. Administrators use **Administration** to create users, reset their passwords, and disable or re-enable logins. Disabled users retain their data.
 
 To permanently remove a user, select them under **Manage an existing user**, choose **Delete user permanently**, and apply the change. Review the warning and type their username exactly to confirm. Deletion removes their login and all saved transactions, accounts, categories, merchant rules, and CSV mappings, and ends their sessions. The administrator cannot be deleted. Existing backups are not modified. If data cleanup fails, the user stays disabled; correct the data-folder permissions and retry deletion.
 
-Each user has separate financial records and CSV formats. There are no shared household workspaces. The administrator manages logins but has no interface to browse another user's finances; the server owner and anyone able to reset passwords remain trusted administrators.
+Each user has separate financial records and CSV formats. There are no shared household workspaces. The administrator manages logins but has no interface to browse another user's finances; the administrator can export and restore all users’ data through complete server backups. The server owner and anyone able to reset passwords remain trusted administrators.
 
-Passwords are stored as salted PBKDF2-SHA256 hashes. Usernames are case-insensitive, and passwords require 12–1,024 characters. There is no public registration or email-based password recovery. Self-service recovery uses the security questions described below. Once initialized, changing `APP_PASSWORD` or `ADMIN_USERNAME` in the environment does not replace stored credentials.
+Passwords are stored as salted PBKDF2-SHA256 hashes. Usernames are case-insensitive and contain 3–40 ASCII letters, numbers, dots, underscores, or hyphens, starting with a letter or number. Passwords require 12–1,024 characters. There is no public registration or email-based password recovery. Self-service recovery uses the security questions described below. Once initialized, changing `APP_PASSWORD` or `ADMIN_USERNAME` in the environment does not replace stored credentials.
 
 Sessions last 12 hours and end on server restart. Password changes and disabling a user invalidate their sessions.
 
@@ -286,13 +301,13 @@ Spearmint uses Python's standard-library HTTP server and is intended for a trust
 
 ### First-login setup and password recovery
 
-On their first login, every user—including the administrator—must choose a password and answer all three questions before accessing financial records. Existing users upgrading from an earlier release enroll on their next login. Administrator password resets require the affected user to complete setup again.
+On their first login, every user—including the administrator—must choose a password and answer all three questions before accessing financial records. Existing users upgrading from before v0.5.0 enroll on their next login; users who have already enrolled keep their setup. Administrator password resets require the affected user to complete setup again.
 
 1. What is your mother's middle name?
 2. What was the name of the town or city where you were born?
 3. What was the first and last name of your childhood best friend?
 
-Answers are case-insensitive and ignore leading/trailing whitespace. They are stored as individually salted hashes, never readable answer text. Remember the answers you supply; they grant access to password recovery.
+Answers must contain 1–256 characters and cannot be whitespace-only. Matching normalizes Unicode, ignores case and leading/trailing whitespace, and preserves internal spacing. They are stored as individually salted hashes, never readable answer text. Remember the answers you supply; they grant access to password recovery.
 
 Choose **Forgot password?** on the login screen, enter your username, and answer the two randomly selected questions. After both answers are verified, choose and confirm a new password. Question challenges expire after ten minutes; verified reset tokens expire after five minutes and can be used only once. Recovery attempts are rate-limited by account and source IP. A reset invalidates previous login sessions. Disabled users cannot recover their accounts.
 
@@ -306,17 +321,44 @@ The Windows executable, installer, shortcuts, setup window, and application wind
 
 ## Back up and update
 
-### Backups
+Choose the backup that matches what you need to restore:
 
-Back up the **entire `/data` directory**. It includes:
+| Option | Contents | Protection | Restore scope |
+| --- | --- | --- | --- |
+| Profile CSV | Signed-in user’s financial records, import settings, and currency | Unencrypted | Replaces that user’s financial data; login stays unchanged |
+| Administration ZIP | All users and credentials, financial databases, and saved server settings | User-chosen password; AES-256 encrypted contents | Replaces the server’s users and saved data; signs everyone out |
+| Offline data-folder copy | Entire data directory, including settings and any SQLite sidecar files | Not encrypted by Spearmint | Restore the complete directory while the app is stopped |
+
+### Personal financial backups (CSV)
+
+Open **Profile → Profile Backup & Restore**, then **Download CSV backup**. This preserves every financial record for the signed-in user: accounts (including archived accounts and opening balances), categories, transactions, notes, import IDs, transfer links, import batch IDs, merchant rules, saved CSV mappings, the mapping associated with each account, and your profile currency. Windows opens a Save As dialog; a browser downloads the CSV.
+
+To restore, choose that CSV, select **Validate backup**, review the record counts, and select **Restore this backup**. Confirm the warning: restoration **replaces all of your current financial records and import settings**, rather than merging. Download a backup of your current data first if you want to keep it. Validation checks format, integrity, record links, and currency before any financial records change; restoration is atomic. Preview approval expires after one hour.
+
+The CSV uses typed records with JSON data cells to preserve all fields exactly. Keep it unmodified; ordinary bank CSVs and older transaction exports belong in **Import CSV** and cannot serve as complete financial backups. Backups support up to 50 MiB (52,428,800 bytes; labeled 50 MB in the interface) and can move financial data between Windows and Docker installations with the same currency and compatible backup format. Login passwords, recovery answers, other users, server settings, and temporary import previews are not included. Use Administration for all users and credentials, or an offline data-folder backup. CSV backups contain private financial data and are not encrypted.
+
+### Administration: complete server backup and restore
+
+Only the administrator can access server backups. Under **Administration**, choose and confirm a backup password (12–1,024 characters), then select **Download server ZIP backup**. Spearmint creates consistent SQLite snapshots and packages them with saved server settings in an AES-256 encrypted ZIP. This preserves all users, including disabled users, password and security-answer hashes, every user's financial data and currency, saved mappings and rules, and the default currency for new profiles. Windows opens a Save As dialog. Browser editions download the ZIP. Keep the backup password safe: it is not saved by Spearmint and cannot be recovered.
+
+To restore, select the encrypted server ZIP, enter its backup password, choose **Validate server backup**, and review the user, database, and transaction counts. Type **RESTORE SERVER**, then confirm the final warning. This replaces all current users and financial data, including removing users created after the backup. Everyone is signed out; sign in with the administrator credentials saved in the backup. Existing recovery challenges and temporary import previews are cleared. Preview approval expires after one hour.
+
+Restore checks encryption, integrity, file paths, compatible database schemas, and record links in staged databases before replacing live data. Application requests pause during backup and restore. A recovery journal rolls back an interrupted replacement before requests resume or on the next startup. Back up the current server first if you need to retain its state. ZIP backups support up to 100 MiB compressed and 500 MiB expanded (the interface labels these limits MB). Use the same Spearmint version on both installations when moving server backups. Old server CSV backups are not accepted by this ZIP flow; create a ZIP backup after upgrading. Personal profile CSV backups remain supported. Docker volumes, ports, HTTPS configuration, and Windows update preferences are deployment settings and are not replaced.
+
+Server exports preserve application data, not deployment configuration: Docker Compose, environment secrets, volume paths, network ports, HTTPS certificates, Windows update preferences, and application binaries are not included or replaced. Maintain those separately. An offline copy of the full data directory remains available for larger installations. Run only one Spearmint server process against a data directory.
+
+### Offline data-folder backups
+
+For an offline backup, stop Spearmint and copy the **entire data directory**. In Docker this is `/data`; on Windows it is `%LOCALAPPDATA%\Spearmint\data`. It includes:
 
 | Path inside the container | Contents |
 | --- | --- |
-| `/data/users.sqlite3` | User logins and password hashes. |
+| `/data/users.sqlite3` | User logins, password and security-answer hashes, account status, and recovery state. |
 | `/data/spearmint.sqlite3` | Original administrator's finances. |
-| `/data/users/<id>/spearmint.sqlite3` | Each additional user's finances. |
+| `/data/users/<id>/spearmint.sqlite3` | Each additional user’s finances, created when they first sign in. |
+| `/data/server-settings.json` | Saved server settings, including the default currency, when present. |
 
-Preserve the directory structure and any SQLite journal files. A complete data-folder backup also preserves all users and their login credentials. See the per-user CSV backup option below.
+Preserve the directory structure and any SQLite journal files. A complete data-folder backup also preserves all users and their login credentials. Use encrypted storage if the offline copy needs protection; a folder copy is not encrypted by Spearmint.
 
 For the supplied Compose configuration, stop the app and copy its data to a **new backup directory** outside the checkout:
 
@@ -385,6 +427,10 @@ Changing project, container, or volume names does not migrate data automatically
 | A saved mapping does not load for an account | Select the account and saved format, then click **Use as account default**. |
 | A payment inflates income or spending | Mark the payment as Transfer on each tracked account and check its signs. |
 | A balance differs from the bank | Check the opening balance, missing or duplicate records, sign inversion, and pending or future-dated entries. |
+| Server ZIP will not validate | Enter the backup password. Use an unmodified Spearmint encrypted ZIP within the size limits and with compatible database schemas. Plain ZIPs and old server CSV backups are not supported. |
+| Profile CSV reports a currency mismatch | Set the profile to the backup’s currency before restoring; no exchange-rate conversion is performed. |
+| Windows does not offer a newer update | Use Check for updates. Confirm the latest published release has a newer supported version tag, the matching EXE asset, and a GitHub SHA-256 digest. Actions artifacts alone do not enable updates. |
+| Windows backup appears not to save | Complete the Save As dialog and look for the Saved message. Cancel creates no file; verify destination permissions if saving fails. |
 
 ## Development
 
@@ -397,17 +443,17 @@ python -m pip install -r requirements.txt
 python app.py
 ```
 
-The local server defaults to port `8080` and a `data` directory beside `app.py`. Override these with `PORT` and `DATA_DIR`. A local Python launch does not automatically load `.env`.
+Running `python app.py` starts a server on all network interfaces (`0.0.0.0`), defaulting to port `8080` and a `data` directory beside `app.py`. This differs from the standalone Windows launcher’s loopback-only server. Override these with `PORT` and `DATA_DIR`. A local Python launch does not automatically load `.env`.
 
 Run the checks with Python and Node.js installed:
 
 ```bash
 python -m unittest discover -s tests -v
 node --check static/app.js
-node --test tests/test_csv_*.js
+node --test tests/test_csv_reader.js tests/test_csv_profiles.js tests/test_bulk_delete.js
 ```
 
-Tests cover financial calculations, imports and encoding, duplicates, profiles and account defaults, categorization, authentication, and user isolation. CI also builds the image and checks container startup. Browser interaction and visual testing are not part of the automated checks.
+Tests cover financial calculations, CSV imports and encoding, duplicates, saved mappings, category imports, bulk deletion, account management, authentication, recovery, user isolation, personal backups, encrypted server backups, restore validation and rollback, and Windows export/update helpers. JavaScript tests cover CSV decoding and selected interface behavior. Linux CI builds the image and checks container startup. Windows CI additionally runs installed WebView2 workflows and transaction-filter layout checks at two window widths; this is targeted coverage, not exhaustive visual or usability testing.
 
 To build your own image:
 
@@ -419,34 +465,10 @@ Set `APP_IMAGE=spearmint:local` and run `docker compose up -d` without pulling f
 
 The [publishing workflow](.github/workflows/docker-publish.yml) runs on pushes to `main` and manual dispatch. After tests pass, it publishes `latest`, the configured version tag, and a `sha-…` tag to GHCR using `GITHUB_TOKEN`. Publishing an image does not update running installations.
 
+The [Windows workflow](.github/workflows/windows-build.yml) runs for pushes to `main`, pull requests, and manual dispatch. It produces an Actions artifact containing the installer EXE and `SHA256SUMS.txt`; it does **not** publish a GitHub Release automatically. To distribute an update, attach the matching EXE to a published, non-prerelease GitHub Release and make it the latest release. The updater reads GitHub’s asset digest, not the separate checksum text file. Keep the version in the interface, Windows launcher, Inno Setup script, Docker tag configuration, and README aligned when preparing a new application release.
+
 ## Current scope
 
 Spearmint currently supports manual entry and CSV imports. Bank synchronization, transaction splits, recurring-bill forecasts, reconciliation workflows, multi-currency conversion, category spending limits, shared household workspaces, and automatic pairing of imported transfers are not implemented.
 
 For a bug report, include the app version, reproduction steps, and exact error. For CSV problems, provide a small **synthetic** example that preserves the layout and date/amount formats without exposing personal transactions or account details.
-
-
-### Backup & Restore
-
-Open **Profile → Profile Backup & Restore**, then **Download CSV backup**. This preserves every financial record for the signed-in user: accounts (including archived accounts and opening balances), categories, transactions, notes, import IDs, transfer links, import batch IDs, merchant rules, saved CSV mappings, the mapping associated with each account, and your profile currency. Windows opens a Save As dialog; a browser downloads the CSV.
-
-To restore, choose that CSV, select **Validate backup**, review the record counts, and select **Restore this backup**. Confirm the warning: restoration **replaces all of your current financial records and import settings**, rather than merging. Download a backup of your current data first if you want to keep it. Validation checks format, integrity, record links, and currency before any financial records change; restoration is atomic. Preview approval expires after one hour.
-
-The CSV uses typed records with JSON data cells to preserve all fields exactly. Keep it unmodified; ordinary bank CSVs and older transaction exports belong in **Import CSV** and cannot serve as complete financial backups. Backups support up to 50 MB and can move financial data between Windows and Docker installations with the same currency and compatible backup format. Login passwords, recovery answers, other users, server settings, and temporary import previews are not included. Use Administration for all users and credentials, or an offline data-folder backup. CSV backups contain private financial data and are not encrypted.
-
-
-### Profile currencies
-
-Choose a currency under **Profile**. Each profile uses one currency across its accounts. Changing it preserves the numeric values of transactions and opening balances; it does not perform an exchange-rate conversion. Supported currencies are CAD, USD, EUR, GBP, AUD, NZD, CHF, CNY, HKD, SGD, INR, MXN, BRL, ZAR, SEK, NOK, DKK, PLN, CZK, AED, SAR, TRY, PHP, THB, and MYR. These currencies use two decimal places, matching Spearmint's exact integer-hundredths storage. Currencies with zero or three decimal places and mixed-currency accounts are not yet supported by the selector.
-
-Existing profiles retain their currency when upgrading. Profile backups from v0.5.6 remain restorable. Set your profile to the backup's currency before restoring; mismatched currencies are rejected.
-
-### Administration: complete server backup and restore
-
-Only the administrator can access server backups. Under **Administration**, choose and confirm a backup password (12–1,024 characters), then select **Download server ZIP backup**. Spearmint creates consistent SQLite snapshots and packages them with saved server settings in an AES-256 encrypted ZIP. This preserves all users, including disabled users, password and security-answer hashes, every user's financial data and currency, saved mappings and rules, and the default currency for new profiles. Windows opens a Save As dialog. Browser editions download the ZIP. Keep the backup password safe: it is not saved by Spearmint and cannot be recovered.
-
-To restore, select the encrypted server ZIP, enter its backup password, choose **Validate server backup**, and review the user, database, and transaction counts. Type **RESTORE SERVER**, then confirm the final warning. This replaces all current users and financial data, including removing users created after the backup. Everyone is signed out; sign in with the administrator credentials saved in the backup. Existing recovery challenges and temporary import previews are cleared. Preview approval expires after one hour.
-
-Restore checks encryption, integrity, file paths, compatible database schemas, and record links in staged databases before replacing live data. Application requests pause during backup and restore. A recovery journal rolls back an interrupted replacement before requests resume or on the next startup. Back up the current server first if you need to retain its state. ZIP backups support up to 100 MB compressed and 500 MB expanded. Use the same Spearmint version on both installations when moving server backups. Old server CSV backups are not accepted by this ZIP flow; create a ZIP backup after upgrading. Personal profile CSV backups remain supported. Docker volumes, ports, HTTPS configuration, and Windows update preferences are deployment settings and are not replaced.
-
-Server exports preserve application data, not deployment configuration: Docker Compose, environment secrets, volume paths, network ports, HTTPS certificates, Windows update preferences, and application binaries are not included or replaced. Maintain those separately. An offline copy of the full data directory remains available for larger installations. Run only one Spearmint server process against a data directory.
