@@ -4,6 +4,7 @@ import tempfile
 import threading
 import unittest
 from datetime import date
+from unittest.mock import patch
 from pathlib import Path
 import app
 
@@ -19,6 +20,39 @@ class DatabaseFixture(unittest.TestCase):
         return app.insert(c,dict(account_id=1,date=day,payee='Store',amount=amount,kind=kind,category_id=cat,note=''))
 
 class FinanceTests(DatabaseFixture):
+    def test_overview_categories_require_selected_month_activity(self):
+        with app.db() as c:
+            self.tx(c,-3000,day='2026-05-05',cat=1)
+            self.tx(c,-6000,day='2026-05-05',cat=2)
+            self.tx(c,-1200,day='2026-08-05',cat=2)
+            self.tx(c,1200,kind='refund',day='2026-08-06',cat=2)
+            self.tx(c,500,kind='refund',day='2026-08-07',cat=None)
+            self.tx(c,9000,kind='income',day='2026-08-08',cat=None)
+            self.tx(c,-1000,kind='transfer',day='2026-08-08',cat=None)
+            before=c.execute('SELECT COUNT(*) FROM transactions').fetchone()[0]
+            report=app.summary(c,'2026-08')
+            categories={r['id']:r for r in report['categories']}
+            self.assertEqual(set(categories),{2,None})
+            self.assertEqual(categories[2]['spent'],0)
+            self.assertEqual(categories[2]['average'],2000)
+            self.assertEqual(categories[None]['spent'],-500)
+            self.assertEqual(report['income'],9000)
+            self.assertEqual(report['expenses'],-500)
+            self.assertEqual(app.summary(c,'2026-07')['categories'],[])
+            self.assertEqual(c.execute('SELECT COUNT(*) FROM transactions').fetchone()[0],before)
+
+    def test_overview_category_activity_respects_current_month_cutoff(self):
+        class FixedDate(date):
+            @classmethod
+            def today(cls):return cls(2026,8,10)
+        with app.db() as c,patch('app.date',FixedDate):
+            self.tx(c,-3000,day='2026-07-01',cat=1)
+            self.tx(c,-500,day='2026-08-11',cat=1)
+            self.tx(c,-700,day='2026-08-10',cat=2)
+            self.tx(c,1000,kind='income',day='2026-08-01',cat=None)
+            self.tx(c,-1000,kind='transfer',day='2026-08-01',cat=None)
+            self.assertEqual([r['id'] for r in app.summary(c,'2026-08')['categories']],[2])
+
     def test_exact_money(self):
         self.assertEqual(app.money('0.29'),29)
         self.assertEqual(app.money('(1,234.56)'),-123456)

@@ -262,11 +262,12 @@ def summary(c, month):
     cats = {r['id']:r['name'] for r in c.execute('SELECT * FROM categories')}
     cats[None] = 'Uncategorized'
     comparisons = []
+    active_categories = {r['category_id'] for r in current_rows if r['kind'] in ('expense','refund')}
     for key,name in cats.items():
         spend = -sum(r['amount'] for r in current_rows if r['category_id']==key and r['kind'] in ('expense','refund'))
         previous = -sum(r['amount'] for r in historical if r['category_id']==key and r['kind'] in ('expense','refund'))
         avg = round(previous/len(periods)) if periods else None
-        if spend or previous:
+        if key in active_categories:
             comparisons.append(dict(id=key,name=name,spent=spend,average=avg,difference=spend-avg if avg is not None else None))
     comparisons.sort(key=lambda r:r['spent'],reverse=True)
     trend=[]
