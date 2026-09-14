@@ -388,11 +388,12 @@ Changing project, container, or volume names does not migrate data automatically
 
 ## Development
 
-The app uses **Python 3.12**, SQLite, and plain HTML/CSS/JavaScript. There are no third-party Python or JavaScript runtime dependencies. Amounts are stored as integer cents.
+The app uses **Python 3.12**, SQLite, and plain HTML/CSS/JavaScript. Encrypted ZIP backups use pyzipper and PyCryptodomex; install the pinned Python dependencies from requirements.txt. There are no third-party JavaScript runtime dependencies. Amounts are stored as integer cents.
 
 To run without Docker, set `APP_PASSWORD` in your shell environment and start:
 
 ```bash
+python -m pip install -r requirements.txt
 python app.py
 ```
 
