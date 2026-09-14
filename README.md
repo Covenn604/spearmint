@@ -273,7 +273,9 @@ When deleting a category, choose another category or **Uncategorized** for its t
 | Usual category spending | Average net spending across eligible months among the previous three calendar months. |
 | Account balances | Opening balances plus all recorded activity, independent of the reporting month. |
 
-For the **current month**, spending includes entries through the server's current day. Category comparisons use the same day of each earlier month, capped at that month's last day. Past-month comparisons use full months.
+The category list shows only categories with expenses or refunds in the selected reporting period, including Uncategorized when applicable. Activity in earlier months alone does not make a category appear. A category still appears when its expenses and refunds net to zero.
+
+For the **current month**, spending and category visibility include entries through the server's current day. Category comparisons use the same day of each earlier month, capped at that month's last day. Past-month comparisons use full months.
 
 The baseline excludes months before the earliest recorded non-transfer transaction. Zero-spend months after that starting month count toward the average. The overview identifies the months used; incomplete history can make comparisons misleading.
 
